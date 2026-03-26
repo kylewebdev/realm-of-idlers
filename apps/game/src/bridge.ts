@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { TileCoord, GameNotification } from "@realm-of-idlers/shared";
-import { TICK_DURATION_MS, tileToWorld } from "@realm-of-idlers/shared";
+import { TICK_DURATION_MS } from "@realm-of-idlers/shared";
 import {
   gameStore,
   loadGame,
@@ -21,6 +21,10 @@ import { createScene } from "./renderer/scene.js";
 import { TileRendererManager } from "./renderer/tile-renderer.js";
 import { SpriteRenderer } from "./renderer/sprite-renderer.js";
 import { Minimap } from "./renderer/minimap.js";
+import { DayNightCycle } from "./renderer/effects.js";
+import { SmoothCamera } from "./renderer/camera.js";
+import { ParticleSystem } from "./renderer/particles.js";
+import { DamageNumbers } from "./renderer/damage-numbers.js";
 import { setupMouseInput } from "./input/mouse.js";
 import { setupKeyboard } from "./input/keyboard.js";
 import { initUI, pushNotification, showWelcomeBack } from "./ui/render.js";
@@ -57,27 +61,46 @@ export async function init(): Promise<void> {
     minimap = new Minimap(minimapContainer, map.tiles);
   }
 
-  // 6. Initialize UI
+  // 6. Create polish systems
+  const dirLight = sceneCtx.scene.children.find(
+    (c) => c instanceof DayNightCycle || (c as any).isDirectionalLight,
+  ) as THREE.DirectionalLight | undefined;
+  const ambientLight = sceneCtx.scene.children.find((c) => (c as any).isAmbientLight) as
+    | THREE.AmbientLight
+    | undefined;
+
+  let dayNight: DayNightCycle | null = null;
+  if (dirLight && ambientLight) {
+    dayNight = new DayNightCycle(dirLight, ambientLight, sceneCtx.scene);
+  }
+
+  const smoothCamera = new SmoothCamera(sceneCtx.camera);
+  const particles = new ParticleSystem(sceneCtx.scene);
+  const damageContainer = document.getElementById("ui-overlay");
+  const damageNumbers = damageContainer ? new DamageNumbers(damageContainer) : null;
+
+  // 7. Initialize UI
   initUI();
 
-  // 6b. Auto-activate "Welcome to Briarwood" quest for new games
+  // 7b. Auto-activate "Welcome to Briarwood" quest for new games
   if (!savedState && !gameStore.getState().quests["welcome"]) {
     gameStore.getState().setQuestStatus("welcome", "active");
     pushNotification("Quest started: Welcome to Briarwood");
   }
 
-  // 7. Initial render position
+  // 8. Initial render position
   const playerPos = gameStore.getState().player.position;
   tileRenderer.update(playerPos.col, playerPos.row);
   spriteRenderer.setPlayerPosition(playerPos.col, playerPos.row);
   minimap?.updatePlayerPosition(playerPos.col, playerPos.row);
-  centerCamera(sceneCtx, playerPos);
+  smoothCamera.setTarget(playerPos.col, playerPos.row);
+  smoothCamera.snap();
 
-  // 7. Build TickContext with activities + combat
+  // 9. Build TickContext with activities + combat
   const ctx: TickContext = createTickContext();
   ctx.processCombatTick = createCombatProcessor(MONSTERS, ITEMS);
 
-  // 8. Tick callback — update renderers on each game tick
+  // 10. Tick callback — update renderers on each game tick
   const onTick = (result: TickResult, notifications: GameNotification[]) => {
     const store = gameStore.getState();
     const pos = store.player.position;
@@ -87,17 +110,45 @@ export async function init(): Promise<void> {
     spriteRenderer.setPlayerPosition(pos.col, pos.row);
     minimap?.updatePlayerPosition(pos.col, pos.row);
     minimap?.updateExploredTiles(store.world.exploredTiles);
-    centerCamera(sceneCtx, pos);
+    smoothCamera.setTarget(pos.col, pos.row);
 
     // Push notifications to UI event log
     for (const n of notifications) {
       pushNotification(n.message);
     }
 
+    // Spawn particles for gather completions
+    if (result.itemsGained.length > 0) {
+      const action = store.actionQueue[0];
+      if (action?.type === "gather") {
+        const actId = action.activityId;
+        const pType = actId.includes("chop") ? "wood" : actId.includes("mine") ? "ore" : "fish";
+        particles.spawnGatherParticle(pos.col, pos.row, pType);
+      }
+    }
+
+    // Spawn level-up particles
+    for (const n of notifications) {
+      if (n.type === "level_up") {
+        particles.spawnLevelUpParticle(pos.col, pos.row);
+      }
+    }
+
+    // Spawn damage numbers for combat events
+    for (const evt of result.combatEvents) {
+      if (evt.type === "hit" && evt.damage) {
+        const color = evt.source === "player" ? "#ffffff" : "#ff4444";
+        const label = evt.source === "player" ? `${evt.damage}` : `-${evt.damage}`;
+        damageNumbers?.spawnAtCenter(label, color, evt.source === "player" ? 30 : -30);
+      } else if (evt.type === "miss") {
+        const color = evt.source === "player" ? "#999999" : "#666666";
+        damageNumbers?.spawnAtCenter("Miss", color, evt.source === "player" ? 30 : -30);
+      }
+    }
+
     // Track monster kills for quest objectives
     for (const evt of result.combatEvents) {
       if (evt.type === "death" && evt.source === "monster") {
-        // Find which monster died from the current action
         const action = store.actionQueue[0];
         if (action?.type === "combat") {
           gameStore.getState().incrementKillCount(action.monsterId);
@@ -108,7 +159,6 @@ export async function init(): Promise<void> {
     // Track craft completions for quest objectives
     for (const item of result.itemsGained) {
       const currentState = gameStore.getState();
-      // Update craft progress for active quests
       for (const [questId, quest] of Object.entries(QUESTS)) {
         if (currentState.quests[questId] !== "active") continue;
         for (const obj of quest.objectives) {
@@ -136,7 +186,7 @@ export async function init(): Promise<void> {
     // Auto-unlock available quests
     const available = getAvailableQuests(gameStore.getState(), QUESTS);
     for (const quest of available) {
-      // Auto-show quests that become available (don't auto-accept)
+      gameStore.getState().setQuestStatus(quest.id, "available");
       pushNotification(`New quest available: ${quest.name}`);
     }
   };
@@ -146,7 +196,7 @@ export async function init(): Promise<void> {
     showWelcomeBack(summary);
   };
 
-  // 9. Create and start the game loop
+  // 11. Create and start the game loop
   const gameLoop = new GameLoop(
     () => gameStore.getState(),
     (s) => gameStore.getState().loadState(s),
@@ -154,7 +204,7 @@ export async function init(): Promise<void> {
     { onTick, onCatchUp },
   );
 
-  // 10. Check for offline time and simulate catch-up
+  // 12. Check for offline time and simulate catch-up
   const lastTick = gameStore.getState().timestamps.lastTick;
   if (lastTick > 0) {
     const elapsed = Date.now() - lastTick;
@@ -167,11 +217,11 @@ export async function init(): Promise<void> {
     }
   }
 
-  // 11. Wire persistence
+  // 13. Wire persistence
   startAutoSave(() => gameStore.getState());
   registerExitSave(() => gameStore.getState());
 
-  // 12. Setup input
+  // 14. Setup input
   let movementPath: TileCoord[] = [];
   let movementIndex = 0;
 
@@ -182,7 +232,7 @@ export async function init(): Promise<void> {
     () => gameStore.getState().player.position,
     (path) => {
       movementPath = path;
-      movementIndex = 1; // skip starting tile
+      movementIndex = 1;
     },
     (tile, _coord) => {
       if (tile.resourceNode) {
@@ -194,7 +244,6 @@ export async function init(): Promise<void> {
           ticksRemaining: 7,
         });
       }
-      // NPC interaction — complete "talk" quest objectives
       if (tile.structure) {
         pushNotification(`Interacting with ${tile.structure}`);
         const currentState = gameStore.getState();
@@ -219,22 +268,33 @@ export async function init(): Promise<void> {
     }
   });
 
-  // 13. Start game loop
+  // 15. Start game loop
   gameLoop.start();
 
-  // 14. Render loop (separate from tick loop)
+  // 16. Render loop with polish systems
+  let lastTime = performance.now();
+
   const renderLoop = () => {
-    // Process movement along path (one tile per frame at ~10fps feel)
+    const now = performance.now();
+    const delta = now - lastTime;
+    lastTime = now;
+
+    // Update polish systems
+    dayNight?.update(delta);
+    smoothCamera.update();
+    particles.update(delta);
+    tileRenderer.updateWater(now);
+
+    // Process movement along path
     if (movementPath.length > 0 && movementIndex < movementPath.length) {
       const nextTile = movementPath[movementIndex]!;
       gameStore.getState().updatePlayer({ position: nextTile });
       gameStore.getState().addExploredTile(`${nextTile.col},${nextTile.row}`);
 
-      const pos = nextTile;
-      spriteRenderer.setPlayerPosition(pos.col, pos.row);
-      tileRenderer.update(pos.col, pos.row);
-      minimap?.updatePlayerPosition(pos.col, pos.row);
-      centerCamera(sceneCtx, pos);
+      spriteRenderer.setPlayerPosition(nextTile.col, nextTile.row);
+      tileRenderer.update(nextTile.col, nextTile.row);
+      minimap?.updatePlayerPosition(nextTile.col, nextTile.row);
+      smoothCamera.setTarget(nextTile.col, nextTile.row);
 
       movementIndex++;
       if (movementIndex >= movementPath.length) {
@@ -250,11 +310,4 @@ export async function init(): Promise<void> {
   requestAnimationFrame(renderLoop);
 
   console.log("[bridge] Game initialized successfully");
-}
-
-/** Center the camera on a tile position. */
-function centerCamera(sceneCtx: { camera: THREE.OrthographicCamera }, pos: TileCoord): void {
-  const worldPos = tileToWorld(pos.col, pos.row, 0);
-  sceneCtx.camera.position.set(worldPos.x + 30, 40, worldPos.z + 30);
-  sceneCtx.camera.lookAt(worldPos.x, 0, worldPos.z);
 }
