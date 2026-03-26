@@ -456,3 +456,26 @@ body {
 .quest-objective.done {
   color: var(--xp-fill);
 }
+
+/* ─── Damage Numbers ─── */
+.damage-number {
+  position: absolute;
+  pointer-events: none;
+  font-weight: 700;
+  font-size: 18px;
+  font-family: monospace;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  animation: float-up 1s ease-out forwards;
+  z-index: 200;
+}
+
+@keyframes float-up {
+  0% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-60px);
+  }
+}

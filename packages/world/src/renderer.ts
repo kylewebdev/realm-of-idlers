@@ -20,6 +20,9 @@ const TERRAIN_COLORS: Record<string, number> = {
 export class ChunkRenderer {
   private activeChunks = new Map<string, THREE.Group>();
   private materials: Record<string, THREE.MeshLambertMaterial>;
+  private waterMaterial: THREE.MeshLambertMaterial;
+  private waterBaseColor = new THREE.Color(0x3a6ea5);
+  private waterAltColor = new THREE.Color(0x4a8ec5);
 
   constructor(
     private scene: THREE.Scene,
@@ -29,6 +32,15 @@ export class ChunkRenderer {
     for (const [terrain, color] of Object.entries(TERRAIN_COLORS)) {
       this.materials[terrain] = new THREE.MeshLambertMaterial({ color });
     }
+    // Water gets its own animated material
+    this.waterMaterial = new THREE.MeshLambertMaterial({ color: 0x3a6ea5 });
+    this.materials.water = this.waterMaterial;
+  }
+
+  /** Animate water color. Call each frame with elapsed time in ms. */
+  updateWater(timeMs: number): void {
+    const t = (Math.sin(timeMs * 0.002) + 1) * 0.5;
+    this.waterMaterial.color.copy(this.waterBaseColor).lerp(this.waterAltColor, t);
   }
 
   /** Update which chunks are rendered based on player position. */

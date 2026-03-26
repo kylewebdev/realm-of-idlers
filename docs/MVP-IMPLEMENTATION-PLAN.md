@@ -841,7 +841,7 @@ type QuestObjective =
 
 ---
 
-## Step 11: Day/Night Cycle & Polish
+## Step 11: Day/Night Cycle & Polish ✅
 
 **Goal:** Atmosphere, visual polish, performance, and final integration.
 
@@ -875,6 +875,28 @@ type QuestObjective =
 - Offline gains feel meaningful on return (8 hours of progress visible)
 - Save/load round-trip integrity verified
 - No memory leaks from chunk loading/disposal
+
+### Implementation Notes
+
+**What was implemented:**
+
+- **Day/night cycle** — `DayNightCycle` class interpolates directional light, ambient light, sky background, and fog colors through a 4-phase palette (night→dawn→day→dusk) over a 20-minute game day cycle. Starts at dawn.
+- **Smooth camera** — `SmoothCamera` lerps camera position toward player each frame (factor 0.08) instead of snapping. `snap()` for initial positioning.
+- **Particle system** — Object-pooled small spheres (64 pool size). Gathering particles (brown/orange/blue by type), level-up gold sparkle bursts. Fade out over 0.5-1.2s.
+- **Damage numbers** — DOM-based floating text with CSS `float-up` animation (translateY + opacity over 1s). White for player hits, red for monster hits, gray for misses.
+- **Water animation** — `ChunkRenderer.updateWater(timeMs)` oscillates water material color between two blue shades via sine wave.
+- **Fog** — `THREE.Fog` added to scene, color synced with day/night cycle.
+
+**What was deferred (needs art assets):**
+
+- Texture atlas for tiles (still using terrain color placeholders)
+- Sprite sheet billboards (still using colored box placeholders)
+- 8-directional character animation
+- Resource node animations (swaying trees, shimmering ore)
+- Torch/campfire point lights at night
+- Integration testing & balancing (manual playtesting checklist)
+
+These visual upgrades can be added when art assets are available without changing any game logic or architecture.
 
 ---
 

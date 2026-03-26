@@ -15,6 +15,7 @@ export interface SceneContext {
 export function createScene(canvas: HTMLCanvasElement): SceneContext {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb); // sky blue
+  scene.fog = new THREE.Fog(0x87ceeb, 40, 80);
 
   // Orthographic camera — isometric 2:1 angle
   const aspect = window.innerWidth / window.innerHeight;

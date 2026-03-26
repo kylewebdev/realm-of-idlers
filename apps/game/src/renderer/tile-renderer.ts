@@ -23,6 +23,11 @@ export class TileRendererManager {
     this.chunkRenderer.updateVisibleChunks(playerCol, playerRow);
   }
 
+  /** Animate water tiles. Call each frame with elapsed time. */
+  updateWater(timeMs: number): void {
+    this.chunkRenderer.updateWater(timeMs);
+  }
+
   dispose(): void {
     this.chunkRenderer.dispose();
   }
