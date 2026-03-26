@@ -642,7 +642,7 @@ Author the 64x64 Briarwood map as a typed constant or static JSON asset:
 
 ---
 
-## Step 8: `apps/game` — Renderer & Scene
+## Step 8: `apps/game` — Renderer & Scene ✅
 
 **Goal:** Wire Three.js into the app and render the Briarwood world.
 
@@ -696,6 +696,25 @@ Author the 64x64 Briarwood map as a typed constant or static JSON asset:
 - Click-to-move works with pathfinding
 - NPC and monster sprites visible in their zones
 - Resource nodes visible with correct terrain placement
+
+### Implementation Notes
+
+**Key decisions:**
+
+- **Bridge as central hub** — `bridge.ts` owns the full boot sequence: load/create state → create map → setup Three.js scene → create renderers → build TickContext with activities + combat → create GameLoop → wire persistence → setup input → start render loop. All integration happens here.
+- **TickContext wiring** — `createTickContext()` from skills provides activities, then `createCombatProcessor(MONSTERS, ITEMS)` is assigned to `ctx.processCombatTick`. This is the dependency injection point from Step 6.
+- **Separate tick and render loops** — GameLoop handles 600ms tick accumulation internally. A separate `requestAnimationFrame` loop handles rendering and movement animation at display refresh rate.
+- **Click-to-move with pathfinding** — Mouse clicks → `screenToTile()` → `findPath()` → movement path stored in bridge, consumed one tile per render frame. Player position updates the store, tile renderer, sprite renderer, minimap, and camera each frame.
+- **Placeholder sprites** — Player (blue box), monsters (red boxes at spawn zone centers), NPCs (yellow boxes at structure tiles). Billboard sprite sheets deferred to Step 11.
+- **Minimap** — 2D canvas at 3× scale (192×192px) in top-right corner. Pre-renders terrain as ImageData, overlays player dot and fog-of-war on each update.
+- **`erasableSyntaxOnly` constraint** — App tsconfig enforces this, so no TypeScript parameter properties (`constructor(private x)`) or other non-erasable syntax in app code. Classes use explicit field declarations.
+- **Offline catch-up on load** — Bridge checks `timestamps.lastTick` on init and runs `simulateOffline()` for missed ticks before starting the game loop.
+
+**Impact on future steps:**
+
+- **Step 9 (UI):** Keyboard hotkeys dispatch `onTogglePanel` — Step 9 should implement the actual panel visibility logic in a UI store. The `#ui-overlay` div regions are ready for panel components.
+- **Step 10 (Quests):** Click-on-tile handler in bridge dispatches gather actions for resource nodes. Quest NPC interaction should be added to the tile click handler (check for `tile.structure` type and open quest dialog).
+- **Step 11 (Polish):** Replace `SpriteRenderer` placeholder boxes with billboard sprite sheets. Replace `ChunkRenderer` color placeholders with texture atlas. Add water UV animation in tile-renderer.ts.
 
 ---
 

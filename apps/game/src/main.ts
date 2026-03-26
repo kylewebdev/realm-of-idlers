@@ -1,6 +1,6 @@
 import "./style.css";
+import { init } from "./bridge.js";
 
-const canvas = document.getElementById("game-canvas") as HTMLCanvasElement;
-if (canvas) {
-  console.log("Realm of Idlers — canvas ready");
-}
+init().catch((err) => {
+  console.error("Failed to initialize game:", err);
+});
