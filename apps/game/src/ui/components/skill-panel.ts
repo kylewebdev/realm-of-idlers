@@ -12,6 +12,7 @@ const SKILLS: SkillType[] = [
   "attack",
   "strength",
   "hitpoints",
+  "stamina",
 ];
 
 export function createSkillPanel(container: HTMLElement): () => void {

@@ -1,15 +1,17 @@
 import { createStore } from "zustand/vanilla";
 import type { SkillType } from "@realm-of-idlers/shared";
 
+export type TabId = "inventory" | "skills" | "equipment";
+
 export interface UIState {
-  panels: { skills: boolean; inventory: boolean; action: boolean };
+  activeTab: TabId;
   activeModal: string | null;
   selectedSkill: SkillType | null;
   eventLog: string[];
 }
 
 export interface UIActions {
-  togglePanel: (panel: keyof UIState["panels"]) => void;
+  setTab: (tab: TabId) => void;
   openModal: (id: string) => void;
   closeModal: () => void;
   selectSkill: (skill: SkillType) => void;
@@ -21,15 +23,12 @@ export type UIStore = UIState & UIActions;
 const MAX_LOG_ENTRIES = 50;
 
 export const uiStore = createStore<UIStore>((set) => ({
-  panels: { skills: true, inventory: true, action: true },
+  activeTab: "inventory",
   activeModal: null,
   selectedSkill: null,
   eventLog: [],
 
-  togglePanel: (panel) =>
-    set((s) => ({
-      panels: { ...s.panels, [panel]: !s.panels[panel] },
-    })),
+  setTab: (tab) => set({ activeTab: tab }),
 
   openModal: (id) => set({ activeModal: id }),
 

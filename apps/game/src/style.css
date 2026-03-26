@@ -66,18 +66,54 @@ body {
   color: var(--accent-gold);
 }
 
-/* ─── Skill Panel (left) ─── */
-#panel-skills {
+/* ─── Tab Panel (bottom-right) ─── */
+#panel-tabs {
   position: absolute;
-  top: 40px;
-  left: 0;
-  width: 200px;
-  max-height: calc(100vh - 52px);
-  overflow-y: auto;
+  bottom: 12px;
+  right: 12px;
+  width: 240px;
+  max-height: calc(100vh - 60px);
+  display: flex;
+  flex-direction: column;
   background: var(--bg-panel);
-  border-right: 2px solid var(--border-stone);
-  border-bottom: 2px solid var(--border-stone);
-  border-radius: 0 0 6px 0;
+  border: 2px solid var(--border-stone);
+  border-radius: 6px;
+}
+
+.tab-bar {
+  display: flex;
+  border-bottom: 1px solid var(--border-stone);
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 6px 4px;
+  background: none;
+  border: none;
+  color: rgba(244, 228, 193, 0.5);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+}
+
+.tab-btn:hover {
+  color: var(--bg-parchment);
+  background: rgba(201, 168, 76, 0.1);
+}
+
+.tab-btn.active {
+  color: var(--accent-gold);
+  border-bottom-color: var(--accent-gold);
+}
+
+.tab-content {
+  overflow-y: auto;
+  flex: 1;
+}
+
+.tab-panel {
+  padding: 0;
 }
 
 .panel-title {
@@ -137,42 +173,62 @@ body {
   transition: width 0.3s;
 }
 
-/* ─── Inventory Panel (right) ─── */
-#panel-inventory {
-  position: absolute;
-  top: 40px;
-  right: 0;
-  width: 220px;
-  background: var(--bg-panel);
-  border-left: 2px solid var(--border-stone);
-  border-bottom: 2px solid var(--border-stone);
-  border-radius: 0 0 0 6px;
-}
-
-.equip-slots {
-  display: flex;
-  gap: 4px;
+/* ─── Equipment Panel ─── */
+.equipment-layout {
   padding: 8px;
-  justify-content: center;
-  border-bottom: 1px solid var(--border-stone);
 }
 
-.equip-slot {
-  width: 36px;
-  height: 36px;
+.equipment-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.equip-slot-large {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
   border: 1px solid var(--border-stone);
   border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
   cursor: pointer;
   background: rgba(0, 0, 0, 0.3);
+  font-size: 12px;
 }
 
-.equip-slot.filled {
-  background: rgba(201, 168, 76, 0.2);
+.equip-slot-large.filled {
+  background: rgba(201, 168, 76, 0.15);
   border-color: var(--accent-gold);
+}
+
+.equip-slot-large:hover {
+  border-color: var(--accent-gold);
+}
+
+.equip-label {
+  color: rgba(244, 228, 193, 0.5);
+  font-size: 11px;
+}
+
+.equip-item {
+  color: var(--bg-parchment);
+}
+
+.equipment-stats {
+  margin-top: 10px;
+  padding: 8px;
+  border-top: 1px solid var(--border-stone);
+  font-size: 12px;
+}
+
+.stat-line {
+  padding: 2px 0;
+  color: rgba(244, 228, 193, 0.7);
+}
+
+.stat-val {
+  color: var(--accent-gold);
+  font-weight: 600;
 }
 
 .inventory-grid {
@@ -271,7 +327,7 @@ body {
 #minimap {
   position: absolute;
   top: 44px;
-  right: 224px;
+  right: 12px;
   border: 2px solid var(--border-stone);
   background: rgba(0, 0, 0, 0.5);
   border-radius: 4px;
@@ -455,6 +511,41 @@ body {
 
 .quest-objective.done {
   color: var(--xp-fill);
+}
+
+/* ─── Bank Modal ─── */
+.bank-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.bank-col h3 {
+  margin-bottom: 8px;
+}
+
+.bank-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 2px;
+}
+
+/* ─── Shop Modal ─── */
+.shop-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 4px;
+  border: 1px solid rgba(139, 125, 107, 0.3);
+}
+
+.shop-item-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12px;
 }
 
 /* ─── Damage Numbers ─── */
