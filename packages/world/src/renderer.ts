@@ -4,6 +4,7 @@ import type { TileMap } from "./types.js";
 import { getChunkTiles, getVisibleChunks } from "./chunks.js";
 import { getTile } from "./briarwood.js";
 
+/** Fallback colors if textures aren't loaded yet. */
 const TERRAIN_COLORS: Record<string, number> = {
   grass: 0x4a7c3f,
   dirt: 0x8b7355,
@@ -11,13 +12,14 @@ const TERRAIN_COLORS: Record<string, number> = {
   water: 0x3a6ea5,
 };
 
-/** Darker variants for cliff/wall faces. */
 const CLIFF_COLORS: Record<string, number> = {
   grass: 0x3a6230,
   dirt: 0x6b5640,
   stone: 0x666666,
   water: 0x2a5580,
 };
+
+const TERRAIN_TYPES = ["grass", "dirt", "stone", "water"] as const;
 
 /**
  * Renders visible tile chunks as Three.js meshes.
@@ -32,43 +34,105 @@ interface FadingChunk {
   group: THREE.Group;
   opacity: number;
   direction: "in" | "out";
-  materials: THREE.MeshLambertMaterial[];
+  materials: THREE.MeshBasicMaterial[];
 }
 
 export class ChunkRenderer {
   private activeChunks = new Map<string, THREE.Group>();
   private fadingChunks = new Map<string, FadingChunk>();
-  private materials: Record<string, THREE.MeshLambertMaterial>;
-  private cliffMaterials: Record<string, THREE.MeshLambertMaterial>;
-  private waterMaterial: THREE.MeshLambertMaterial;
-  private waterBaseColor = new THREE.Color(0x3a6ea5);
-  private waterAltColor = new THREE.Color(0x4a8ec5);
+  /** Loaded textures — shared across all chunk materials. */
+  private terrainTextures: Record<string, THREE.Texture | null> = {};
+  private cliffTextures: Record<string, THREE.Texture | null> = {};
+  /** Fallback colors used until textures load. */
+  private terrainColors = TERRAIN_COLORS;
+  private cliffColorMap = CLIFF_COLORS;
+  private pendingRebuild = false;
 
   constructor(
     private scene: THREE.Scene,
     private tiles: TileMap,
   ) {
-    this.materials = {};
-    this.cliffMaterials = {};
-    for (const [terrain, color] of Object.entries(TERRAIN_COLORS)) {
-      this.materials[terrain] = new THREE.MeshLambertMaterial({ color });
+    const loader = new THREE.TextureLoader();
+    let pending = 0;
+    const onLoaded = () => {
+      pending--;
+      if (pending <= 0) {
+        this.pendingRebuild = true;
+      }
+    };
+
+    for (const terrain of TERRAIN_TYPES) {
+      this.terrainTextures[terrain] = null;
+      this.cliffTextures[terrain] = null;
+
+      pending++;
+      loader.load(
+        `/tiles/${terrain}.png`,
+        (t) => {
+          t.magFilter = THREE.NearestFilter;
+          t.minFilter = THREE.LinearMipmapLinearFilter;
+          t.generateMipmaps = true;
+          t.colorSpace = THREE.SRGBColorSpace;
+          this.terrainTextures[terrain] = t;
+          onLoaded();
+        },
+        undefined,
+        onLoaded,
+      ); // count errors as loaded to not block
+
+      pending++;
+      loader.load(
+        `/tiles/${terrain}-cliff.png`,
+        (t) => {
+          t.magFilter = THREE.NearestFilter;
+          t.minFilter = THREE.LinearMipmapLinearFilter;
+          t.generateMipmaps = true;
+          t.colorSpace = THREE.SRGBColorSpace;
+          this.cliffTextures[terrain] = t;
+          onLoaded();
+        },
+        undefined,
+        onLoaded,
+      );
     }
-    for (const [terrain, color] of Object.entries(CLIFF_COLORS)) {
-      this.cliffMaterials[terrain] = new THREE.MeshLambertMaterial({ color });
-    }
-    // Water gets its own animated material
-    this.waterMaterial = new THREE.MeshLambertMaterial({ color: 0x3a6ea5 });
-    this.materials.water = this.waterMaterial;
   }
 
-  /** Animate water color. Call each frame with elapsed time in ms. */
-  updateWater(timeMs: number): void {
-    const t = (Math.sin(timeMs * 0.002) + 1) * 0.5;
-    this.waterMaterial.color.copy(this.waterBaseColor).lerp(this.waterAltColor, t);
+  /** Create a material for a terrain type — uses texture if loaded, else color. */
+  private makeTerrainMat(terrain: string): THREE.MeshBasicMaterial {
+    const tex = this.terrainTextures[terrain];
+    if (tex) {
+      return new THREE.MeshBasicMaterial({ map: tex });
+    }
+    return new THREE.MeshBasicMaterial({ color: this.terrainColors[terrain] ?? 0x888888 });
+  }
+
+  /** Create a material for a cliff face. */
+  private makeCliffMat(terrain: string): THREE.MeshBasicMaterial {
+    const tex = this.cliffTextures[terrain];
+    if (tex) {
+      return new THREE.MeshBasicMaterial({ map: tex });
+    }
+    return new THREE.MeshBasicMaterial({ color: this.cliffColorMap[terrain] ?? 0x666666 });
+  }
+
+  /** Animate water materials across all active chunks. */
+  updateWater(_timeMs: number): void {
+    // Water animation is subtle enough that static textures look fine for now.
+    // TODO: animate water UVs or tint if desired.
   }
 
   /** Update which chunks are rendered based on player position. */
   updateVisibleChunks(centerCol: number, centerRow: number): void {
+    // If textures just finished loading, rebuild all chunks
+    if (this.pendingRebuild) {
+      this.pendingRebuild = false;
+      for (const [, group] of this.activeChunks) {
+        this.scene.remove(group);
+      }
+      this.activeChunks.clear();
+      this.fadingChunks.clear();
+    }
+
     const visible = getVisibleChunks(centerCol, centerRow, 4);
     const visibleKeys = new Set(visible.map((c) => chunkKey(c.chunkCol, c.chunkRow)));
 
@@ -76,7 +140,6 @@ export class ChunkRenderer {
     for (const [key, group] of this.activeChunks) {
       if (!visibleKeys.has(key)) {
         this.activeChunks.delete(key);
-        // Collect per-chunk materials for opacity control
         const mats = this.collectGroupMaterials(group);
         this.fadingChunks.set(key, { group, opacity: 1, direction: "out", materials: mats });
       }
@@ -86,7 +149,6 @@ export class ChunkRenderer {
     for (const chunk of visible) {
       const key = chunkKey(chunk.chunkCol, chunk.chunkRow);
       if (!this.activeChunks.has(key)) {
-        // If it was fading out, reverse it
         const existing = this.fadingChunks.get(key);
         if (existing) {
           existing.direction = "in";
@@ -96,7 +158,6 @@ export class ChunkRenderer {
 
         const group = this.createChunkGroup(chunk.chunkCol, chunk.chunkRow);
         const mats = this.collectGroupMaterials(group);
-        // Start fully transparent
         for (const mat of mats) {
           mat.transparent = true;
           mat.opacity = 0;
@@ -149,19 +210,19 @@ export class ChunkRenderer {
     }
     this.activeChunks.clear();
 
-    for (const mat of Object.values(this.materials)) {
-      mat.dispose();
+    for (const tex of Object.values(this.terrainTextures)) {
+      tex?.dispose();
     }
-    for (const mat of Object.values(this.cliffMaterials)) {
-      mat.dispose();
+    for (const tex of Object.values(this.cliffTextures)) {
+      tex?.dispose();
     }
   }
 
   /** Collect unique per-mesh materials from a chunk group (clones shared mats). */
-  private collectGroupMaterials(group: THREE.Group): THREE.MeshLambertMaterial[] {
-    const mats: THREE.MeshLambertMaterial[] = [];
+  private collectGroupMaterials(group: THREE.Group): THREE.MeshBasicMaterial[] {
+    const mats: THREE.MeshBasicMaterial[] = [];
     group.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshLambertMaterial) {
+      if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
         // Clone shared material so opacity changes don't affect other chunks
         const clone = child.material.clone();
         child.material = clone;
@@ -181,7 +242,7 @@ export class ChunkRenderer {
         if (!tile) continue;
 
         const geometry = new THREE.PlaneGeometry(1, 1);
-        const material = this.materials[tile.terrain] ?? this.materials.grass!;
+        const material = this.makeTerrainMat(tile.terrain);
         const mesh = new THREE.Mesh(geometry, material);
 
         const pos = tileToWorld(col, row, tile.elevation);
@@ -207,7 +268,7 @@ export class ChunkRenderer {
 
           const wallHeight = elevDiff * 0.5;
           const wallGeo = new THREE.PlaneGeometry(1, wallHeight);
-          const wallMat = this.cliffMaterials[tile.terrain] ?? this.cliffMaterials.stone!;
+          const wallMat = this.makeCliffMat(tile.terrain);
           const wallMesh = new THREE.Mesh(wallGeo, wallMat);
 
           // Position at the edge of this tile, halfway down the cliff

@@ -9,6 +9,10 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@google/genai": "catalog:",
+    "@types/mime": "catalog:",
+    "mime": "catalog:",
+    "tsx": "catalog:",
     "vite-plus": "catalog:"
   },
   "engines": {

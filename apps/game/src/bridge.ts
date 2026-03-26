@@ -51,6 +51,7 @@ export async function init(): Promise<void> {
   // 4. Create renderers
   const tileRenderer = new TileRendererManager(sceneCtx, map.tiles);
   const spriteRenderer = new SpriteRenderer(sceneCtx.scene, map.tiles);
+  spriteRenderer.setCamera(sceneCtx.camera);
   spriteRenderer.updateSpawnZones(map.spawnZones);
   spriteRenderer.updateEntities(map.tiles);
 

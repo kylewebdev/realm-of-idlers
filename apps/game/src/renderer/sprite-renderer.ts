@@ -3,29 +3,59 @@ import { tileToWorld } from "@realm-of-idlers/shared";
 import type { SpawnZone, TileMap } from "@realm-of-idlers/world";
 import { getTile } from "@realm-of-idlers/world";
 
-/** Half-height of the player box — used to sit the sprite on top of terrain. */
+/** Half-height of the player sprite. */
 const PLAYER_HALF_HEIGHT = 0.6;
 
-/** Colors and sizes for resource node entities by activity prefix. */
+const loader = new THREE.TextureLoader();
+
+/** Load a sprite texture with pixel-art settings. */
+function loadSprite(name: string): THREE.Texture {
+  const tex = loader.load(`/sprites/${name}.png`);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+/** Create a billboard sprite material. Falls back to colored box if no texture. */
+function makeSpriteMaterial(
+  textureName: string | null,
+  fallbackColor: number,
+): THREE.MeshBasicMaterial {
+  if (textureName) {
+    return new THREE.MeshBasicMaterial({
+      map: loadSprite(textureName),
+      transparent: true,
+      alphaTest: 0.1,
+      side: THREE.DoubleSide,
+    });
+  }
+  return new THREE.MeshBasicMaterial({ color: fallbackColor });
+}
+
+/** Sprite size and texture mapping for resource nodes by activity prefix. */
 const RESOURCE_STYLES: Record<
   string,
-  { color: number; width: number; height: number; depth: number }
+  { color: number; width: number; height: number; sprite: string | null }
 > = {
-  "chop-normal-tree": { color: 0x2d8a4e, width: 0.5, height: 1.0, depth: 0.5 }, // green
-  "chop-oak-tree": { color: 0x1b5e30, width: 0.6, height: 1.2, depth: 0.6 }, // dark green
-  "mine-copper": { color: 0xc87533, width: 0.5, height: 0.5, depth: 0.5 }, // copper orange
-  "mine-tin": { color: 0xb0b0b0, width: 0.5, height: 0.5, depth: 0.5 }, // silver-grey
-  "mine-iron": { color: 0x6b3a2a, width: 0.5, height: 0.5, depth: 0.5 }, // dark brown
-  "fish-shrimp": { color: 0x5599cc, width: 0.4, height: 0.3, depth: 0.4 }, // light blue
-  "fish-trout": { color: 0x3377aa, width: 0.5, height: 0.4, depth: 0.5 }, // deeper blue
+  "chop-normal-tree": { color: 0x2d8a4e, width: 1.0, height: 1.4, sprite: "normal-tree" },
+  "chop-oak-tree": { color: 0x1b5e30, width: 1.2, height: 1.6, sprite: "oak-tree" },
+  "mine-copper": { color: 0xc87533, width: 0.7, height: 0.7, sprite: "copper-rock" },
+  "mine-tin": { color: 0xb0b0b0, width: 0.7, height: 0.7, sprite: "tin-rock" },
+  "mine-iron": { color: 0x6b3a2a, width: 0.7, height: 0.7, sprite: "iron-rock" },
+  "fish-shrimp": { color: 0x5599cc, width: 0.6, height: 0.5, sprite: "fishing-spot-shrimp" },
+  "fish-trout": { color: 0x3377aa, width: 0.7, height: 0.6, sprite: "fishing-spot-trout" },
 };
 
-/** Colors for structure entities. */
-const STRUCTURE_COLORS: Record<string, number> = {
-  shop: 0xcccc33, // yellow
-  bank: 0xdaa520, // gold
-  forge: 0xff6633, // orange-red
-  "cooking-range": 0xcc6644, // warm brown
+/** Structure sprite mapping. */
+const STRUCTURE_STYLES: Record<
+  string,
+  { color: number; width: number; height: number; sprite: string | null }
+> = {
+  shop: { color: 0xcccc33, width: 1.0, height: 1.2, sprite: "shop" },
+  bank: { color: 0xdaa520, width: 1.0, height: 1.2, sprite: "bank" },
+  forge: { color: 0xff6633, width: 1.0, height: 1.2, sprite: "forge" },
+  "cooking-range": { color: 0xcc6644, width: 1.0, height: 1.2, sprite: "cooking-range" },
 };
 
 /**
@@ -34,6 +64,7 @@ const STRUCTURE_COLORS: Record<string, number> = {
 export class SpriteRenderer {
   private playerMesh: THREE.Mesh;
   private scene: THREE.Scene;
+  private camera: THREE.Camera | null = null;
   private tiles: TileMap;
   private monsterMeshes: THREE.Mesh[] = [];
   private entityMeshes: THREE.Mesh[] = [];
@@ -52,9 +83,9 @@ export class SpriteRenderer {
   constructor(scene: THREE.Scene, tiles: TileMap) {
     this.scene = scene;
     this.tiles = tiles;
-    // Player: blue box
-    const playerGeo = new THREE.BoxGeometry(0.6, 1.2, 0.6);
-    const playerMat = new THREE.MeshLambertMaterial({ color: 0x3366cc });
+    // Player: billboard sprite
+    const playerGeo = new THREE.PlaneGeometry(0.8, 1.2);
+    const playerMat = makeSpriteMaterial("player", 0x3366cc);
     this.playerMesh = new THREE.Mesh(playerGeo, playerMat);
     this.playerMesh.position.y = PLAYER_HALF_HEIGHT;
     scene.add(this.playerMesh);
@@ -96,16 +127,38 @@ export class SpriteRenderer {
     this.moveProgress = 1;
   }
 
+  /** Set camera reference for billboarding. */
+  setCamera(camera: THREE.Camera): void {
+    this.camera = camera;
+  }
+
   /** Smoothly interpolate the player sprite between tiles each frame. */
   update(deltaMs: number): void {
     if (this.moveProgress < 1) {
       this.moveProgress = Math.min(1, this.moveProgress + deltaMs / this.moveDelayMs);
-      // Linear interpolation — constant speed between tiles for smooth continuous motion
       const t = this.moveProgress;
       this.playerMesh.position.x = this.prevX + (this.targetX - this.prevX) * t;
       this.playerMesh.position.y = this.prevY + (this.targetY - this.prevY) * t;
       this.playerMesh.position.z = this.prevZ + (this.targetZ - this.prevZ) * t;
     }
+
+    // Billboard all sprites to face the camera
+    if (this.camera) {
+      this.billboardToCamera(this.playerMesh);
+      for (const mesh of this.entityMeshes) {
+        this.billboardToCamera(mesh);
+      }
+    }
+  }
+
+  /** Rotate a plane mesh to face the camera (Y-axis billboard). */
+  private billboardToCamera(mesh: THREE.Mesh): void {
+    if (!this.camera) return;
+    // Only rotate on Y axis so sprites stay upright
+    const camPos = this.camera.position;
+    const dx = camPos.x - mesh.position.x;
+    const dz = camPos.z - mesh.position.z;
+    mesh.rotation.y = Math.atan2(dx, dz);
   }
 
   /** Place monster sprites at spawn zone centers. */
@@ -147,12 +200,16 @@ export class SpriteRenderer {
         if (!tile) continue;
 
         if (tile.structure) {
-          const color = STRUCTURE_COLORS[tile.structure] ?? 0xcccc33;
-          const geo = new THREE.BoxGeometry(0.5, 1.0, 0.5);
-          const mat = new THREE.MeshLambertMaterial({ color });
+          const style = STRUCTURE_STYLES[tile.structure];
+          const w = style?.width ?? 1.0;
+          const h = style?.height ?? 1.2;
+          const color = style?.color ?? 0xcccc33;
+          const sprite = style?.sprite ?? null;
+          const geo = new THREE.PlaneGeometry(w, h);
+          const mat = makeSpriteMaterial(sprite, color);
           const mesh = new THREE.Mesh(geo, mat);
           const pos = tileToWorld(col, row, tile.elevation);
-          mesh.position.set(pos.x, pos.y + 0.5, pos.z);
+          mesh.position.set(pos.x, pos.y + h / 2, pos.z);
           mesh.userData = { tileCol: col, tileRow: row };
           this.scene.add(mesh);
           this.entityMeshes.push(mesh);
@@ -160,12 +217,12 @@ export class SpriteRenderer {
 
         if (tile.resourceNode) {
           const style = RESOURCE_STYLES[tile.resourceNode.activityId];
-          const w = style?.width ?? 0.4;
+          const w = style?.width ?? 0.6;
           const h = style?.height ?? 0.6;
-          const d = style?.depth ?? 0.4;
           const color = style?.color ?? 0xaaaaaa;
-          const geo = new THREE.BoxGeometry(w, h, d);
-          const mat = new THREE.MeshLambertMaterial({ color });
+          const sprite = style?.sprite ?? null;
+          const geo = new THREE.PlaneGeometry(w, h);
+          const mat = makeSpriteMaterial(sprite, color);
           const mesh = new THREE.Mesh(geo, mat);
           const pos = tileToWorld(col, row, tile.elevation);
           mesh.position.set(pos.x, pos.y + h / 2, pos.z);
