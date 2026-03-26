@@ -14,6 +14,8 @@ import { createTickContext } from "@realm-of-idlers/skills";
 import { createCombatProcessor, MONSTERS } from "@realm-of-idlers/combat";
 import { ITEMS } from "@realm-of-idlers/items";
 import { createBriarwoodMap } from "@realm-of-idlers/world";
+import { QUESTS } from "./quests/registry.js";
+import { checkQuestProgress, getAvailableQuests } from "./quests/checker.js";
 
 import { createScene } from "./renderer/scene.js";
 import { TileRendererManager } from "./renderer/tile-renderer.js";
@@ -58,6 +60,12 @@ export async function init(): Promise<void> {
   // 6. Initialize UI
   initUI();
 
+  // 6b. Auto-activate "Welcome to Briarwood" quest for new games
+  if (!savedState && !gameStore.getState().quests["welcome"]) {
+    gameStore.getState().setQuestStatus("welcome", "active");
+    pushNotification("Quest started: Welcome to Briarwood");
+  }
+
   // 7. Initial render position
   const playerPos = gameStore.getState().player.position;
   tileRenderer.update(playerPos.col, playerPos.row);
@@ -70,20 +78,66 @@ export async function init(): Promise<void> {
   ctx.processCombatTick = createCombatProcessor(MONSTERS, ITEMS);
 
   // 8. Tick callback — update renderers on each game tick
-  const onTick = (_result: TickResult, notifications: GameNotification[]) => {
-    const currentState = gameStore.getState();
-    const pos = currentState.player.position;
+  const onTick = (result: TickResult, notifications: GameNotification[]) => {
+    const store = gameStore.getState();
+    const pos = store.player.position;
 
     // Update renderers
     tileRenderer.update(pos.col, pos.row);
     spriteRenderer.setPlayerPosition(pos.col, pos.row);
     minimap?.updatePlayerPosition(pos.col, pos.row);
-    minimap?.updateExploredTiles(currentState.world.exploredTiles);
+    minimap?.updateExploredTiles(store.world.exploredTiles);
     centerCamera(sceneCtx, pos);
 
     // Push notifications to UI event log
     for (const n of notifications) {
       pushNotification(n.message);
+    }
+
+    // Track monster kills for quest objectives
+    for (const evt of result.combatEvents) {
+      if (evt.type === "death" && evt.source === "monster") {
+        // Find which monster died from the current action
+        const action = store.actionQueue[0];
+        if (action?.type === "combat") {
+          gameStore.getState().incrementKillCount(action.monsterId);
+        }
+      }
+    }
+
+    // Track craft completions for quest objectives
+    for (const item of result.itemsGained) {
+      const currentState = gameStore.getState();
+      // Update craft progress for active quests
+      for (const [questId, quest] of Object.entries(QUESTS)) {
+        if (currentState.quests[questId] !== "active") continue;
+        for (const obj of quest.objectives) {
+          if (obj.type === "craft" && obj.itemId === item.itemId) {
+            const prev = currentState.questProgress[questId]?.[obj.objectiveId] ?? 0;
+            gameStore
+              .getState()
+              .updateQuestProgress(questId, obj.objectiveId, prev + item.quantity);
+          }
+        }
+      }
+    }
+
+    // Check quest progress
+    const questUpdates = checkQuestProgress(gameStore.getState(), QUESTS);
+    for (const update of questUpdates) {
+      if (update.completed) {
+        const quest = QUESTS[update.questId];
+        if (quest) {
+          pushNotification(`Quest ready to claim: ${quest.name}`);
+        }
+      }
+    }
+
+    // Auto-unlock available quests
+    const available = getAvailableQuests(gameStore.getState(), QUESTS);
+    for (const quest of available) {
+      // Auto-show quests that become available (don't auto-accept)
+      pushNotification(`New quest available: ${quest.name}`);
     }
   };
 
@@ -140,12 +194,28 @@ export async function init(): Promise<void> {
           ticksRemaining: 7,
         });
       }
+      // NPC interaction — complete "talk" quest objectives
+      if (tile.structure) {
+        pushNotification(`Interacting with ${tile.structure}`);
+        const currentState = gameStore.getState();
+        for (const [questId, quest] of Object.entries(QUESTS)) {
+          if (currentState.quests[questId] !== "active") continue;
+          for (const obj of quest.objectives) {
+            if (obj.type === "talk") {
+              gameStore.getState().updateQuestProgress(questId, obj.objectiveId, 1);
+              pushNotification(`Talked to ${obj.npcId}!`);
+            }
+          }
+        }
+      }
     },
   );
 
   setupKeyboard((panel) => {
     if (panel === "inventory" || panel === "skills" || panel === "action") {
       uiStore.getState().togglePanel(panel);
+    } else if (panel === "quests") {
+      uiStore.getState().openModal("quest-journal");
     }
   });
 

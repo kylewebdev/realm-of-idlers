@@ -7,6 +7,7 @@ import { createActionPanel } from "./components/action-panel.js";
 import { createEventLog } from "./components/event-log.js";
 import { renderSkillDetail } from "./screens/skill-detail.js";
 import { renderWelcomeBack } from "./screens/welcome-back.js";
+import { renderQuestJournal } from "./screens/quest-journal.js";
 
 const unsubs: (() => void)[] = [];
 
@@ -41,6 +42,8 @@ export function initUI(): void {
 
         if (activeModal === "skill-detail" && selectedSkill) {
           renderSkillDetail(modalRoot, selectedSkill);
+        } else if (activeModal === "quest-journal") {
+          renderQuestJournal(modalRoot);
         }
         // welcome-back is rendered via showWelcomeBack()
       }),

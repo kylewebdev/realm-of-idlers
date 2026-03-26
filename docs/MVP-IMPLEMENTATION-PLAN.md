@@ -782,7 +782,7 @@ Author the 64x64 Briarwood map as a typed constant or static JSON asset:
 
 ---
 
-## Step 10: Quests
+## Step 10: Quests ✅
 
 **Goal:** 5 introductory quests that teach core mechanics.
 
@@ -825,6 +825,19 @@ type QuestObjective =
 - Quest completes when all objectives met
 - Rewards apply to state (items, XP, gold)
 - Prerequisites gate quest availability
+
+### Implementation Notes
+
+**Key decisions:**
+
+- **Quest logic in app layer** — No `packages/quests` was scaffolded. Since quests reference items, skills, combat, and world (top of dependency tree), quest definitions and logic live in `apps/game/src/quests/`. This avoids circular dependencies.
+- **Post-tick quest checking** — The bridge runs `checkQuestProgress()` after each tick rather than modifying engine processors. Quest objectives auto-complete by examining current state (inventory counts, skill levels, kill counts).
+- **GameState extended** — Added `questProgress: Record<QuestId, Record<string, number>>` for tracking objective counters (craft counts, talk completions) and `killCounts: Record<string, number>` for monster kills. Both initialized as empty objects.
+- **Kill tracking via combat events** — Bridge's `onTick` detects `CombatEvent { type: "death", source: "monster" }` and increments `killCounts[monsterId]` in the store.
+- **Craft tracking via tick results** — When `itemsGained` includes items matching active craft quest objectives, bridge increments the quest progress counter.
+- **"Welcome to Briarwood" auto-activated** — On new game, the welcome quest is set to "active". Clicking any town structure completes the "talk" objective (simplified NPC interaction).
+- **Quest journal modal** — Opened via "Q" hotkey. Shows available (Accept button), active (objective progress), and completed quests. "Claim" button appears when all objectives are met.
+- **Reward application** — `applyQuestRewards()` adds items to inventory, XP to skills, and gold to player via store actions.
 
 ---
 

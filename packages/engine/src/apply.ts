@@ -79,6 +79,10 @@ export function cloneState(state: GameState): GameState {
     bank: { slots: state.bank.slots.map((s) => (s ? { ...s } : null)) },
     actionQueue: state.actionQueue.map((a) => ({ ...a })),
     quests: { ...state.quests },
+    questProgress: Object.fromEntries(
+      Object.entries(state.questProgress).map(([k, v]) => [k, { ...v }]),
+    ),
+    killCounts: { ...state.killCounts },
     world: {
       resourceNodes: Object.fromEntries(
         Object.entries(state.world.resourceNodes).map(([k, v]) => [k, { ...v }]),

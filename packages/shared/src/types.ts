@@ -137,6 +137,8 @@ export interface GameState {
   bank: BankState;
   actionQueue: ActionEntry[];
   quests: Record<QuestId, QuestStatus>;
+  questProgress: Record<QuestId, Record<string, number>>;
+  killCounts: Record<string, number>;
   world: {
     resourceNodes: Record<NodeId, { depleted: boolean; respawnAt: number }>;
     exploredTiles: Set<string>;

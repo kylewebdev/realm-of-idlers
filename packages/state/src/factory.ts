@@ -47,6 +47,8 @@ export function createNewGameState(playerName: string): GameState {
     },
     actionQueue: [{ type: "idle" }],
     quests: {},
+    questProgress: {},
+    killCounts: {},
     world: {
       resourceNodes: {},
       exploredTiles: new Set<string>(),

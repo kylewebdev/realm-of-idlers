@@ -12,6 +12,8 @@ function makeState(gold: number): GameState {
     bank: { slots: [] },
     actionQueue: [],
     quests: {},
+    questProgress: {},
+    killCounts: {},
     world: { resourceNodes: {}, exploredTiles: new Set() },
     settings: { autoEatThreshold: 0.5, uiScale: 1 },
     timestamps: { lastSave: 0, lastTick: 0, created: 0 },

@@ -31,6 +31,8 @@ export function createTestState(overrides?: Partial<GameState>): GameState {
     bank: { slots: new Array(BANK_SLOTS).fill(null) },
     actionQueue: [{ type: "idle" }],
     quests: {},
+    questProgress: {},
+    killCounts: {},
     world: { resourceNodes: {}, exploredTiles: new Set() },
     settings: { autoEatThreshold: 0.5, uiScale: 1 },
     timestamps: { lastSave: Date.now(), lastTick: Date.now(), created: Date.now() },

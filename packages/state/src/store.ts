@@ -33,6 +33,12 @@ export interface GameActions {
 
   /** Set a quest's status. */
   setQuestStatus: (questId: QuestId, status: QuestStatus) => void;
+
+  /** Update quest objective progress. */
+  updateQuestProgress: (questId: QuestId, objectiveId: string, count: number) => void;
+
+  /** Increment a monster kill count. */
+  incrementKillCount: (monsterId: string) => void;
 }
 
 export type GameStore = GameState & GameActions;
@@ -85,6 +91,19 @@ export const createGameStore = (playerName = "Player") =>
       setQuestStatus: (questId, status) =>
         set((s) => {
           s.quests[questId] = status;
+        }),
+
+      updateQuestProgress: (questId, objectiveId, count) =>
+        set((s) => {
+          if (!s.questProgress[questId]) {
+            s.questProgress[questId] = {};
+          }
+          s.questProgress[questId][objectiveId] = count;
+        }),
+
+      incrementKillCount: (monsterId) =>
+        set((s) => {
+          s.killCounts[monsterId] = (s.killCounts[monsterId] ?? 0) + 1;
         }),
     })),
   );
