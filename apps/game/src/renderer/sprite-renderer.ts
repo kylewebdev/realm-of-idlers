@@ -8,30 +8,41 @@ const PLAYER_HALF_HEIGHT = 0.6;
 
 const loader = new THREE.TextureLoader();
 
-/** Load a sprite texture with pixel-art settings. */
-function loadSprite(name: string): THREE.Texture {
-  const tex = loader.load(`/sprites/${name}.png`);
-  tex.magFilter = THREE.NearestFilter;
-  tex.minFilter = THREE.NearestFilter;
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
-/** Create a billboard sprite material. Falls back to colored box if no texture. */
+/**
+ * Create a sprite material that attempts to load a texture.
+ * If the texture file is missing (404), falls back to a solid color.
+ */
 function makeSpriteMaterial(
   textureName: string | null,
   fallbackColor: number,
 ): THREE.MeshBasicMaterial {
+  const mat = new THREE.MeshBasicMaterial({
+    color: fallbackColor,
+    side: THREE.DoubleSide,
+  });
+
   if (textureName) {
-    return new THREE.MeshBasicMaterial({
-      map: loadSprite(textureName),
-      transparent: true,
-      alphaTest: 0.5,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    });
+    loader.load(
+      `/sprites/${textureName}.png`,
+      (tex) => {
+        tex.magFilter = THREE.NearestFilter;
+        tex.minFilter = THREE.NearestFilter;
+        tex.colorSpace = THREE.SRGBColorSpace;
+        mat.map = tex;
+        mat.color.set(0xffffff);
+        mat.transparent = true;
+        mat.alphaTest = 0.5;
+        mat.depthWrite = false;
+        mat.needsUpdate = true;
+      },
+      undefined,
+      () => {
+        // Texture failed to load — keep the fallback color
+      },
+    );
   }
-  return new THREE.MeshBasicMaterial({ color: fallbackColor });
+
+  return mat;
 }
 
 /**
