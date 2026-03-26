@@ -560,7 +560,7 @@ else:
 
 ---
 
-## Step 7: `packages/world` — Tile Engine & Pathfinding
+## Step 7: `packages/world` — Tile Engine & Pathfinding ✅
 
 **Goal:** Define the Briarwood map data, tile system, chunk rendering, and pathfinding.
 
@@ -619,6 +619,26 @@ Author the 64x64 Briarwood map as a typed constant or static JSON asset:
 - A\* finds path between two walkable tiles
 - A\* returns null for unreachable tiles
 - Chunk boundaries don't produce gaps or overlaps
+
+### Implementation Notes
+
+**Key decisions:**
+
+- **Two-layer architecture** — Pure data layer (types, map, pathfinding, chunk math) has no Three.js dependency and is fully unit-testable. Three.js rendering layer (ChunkRenderer, screenToTile) is validated manually in Step 8.
+- **Procedural map generator** — `createBriarwoodMap()` builds the 64×64 map programmatically rather than storing it as static JSON. This makes it easy to iterate on layout and add new zones.
+- **Map layout** — Town center at col/row 27-36 (center of map). NW forest (normal trees), NE forest (oak trees), east mining area (elevation 1-2), south river (row 48-51), water border (2-tile ring). Dirt paths connect zones along row 32 and col 32.
+- **Resource nodes link to activity IDs** — Each `ResourceNodeDef` has an `activityId` matching the skills registry (e.g. `"chop-normal-tree"`, `"mine-copper"`, `"fish-shrimp"`). This links world tiles to the engine's activity system.
+- **Spawn zones** — 10 zones matching the 10 monsters from Step 6, graduated by distance from town. Each zone is a rectangular area of tile coordinates.
+- **A\* pathfinding** — 4-directional, Manhattan heuristic, 50-tile default cap. Returns null for unreachable or over-cap paths.
+- **Chunk math separated from rendering** — `tileToChunk`, `getChunkTiles`, `getVisibleChunks` are pure functions. `ChunkRenderer` uses them but adds Three.js mesh creation/pooling.
+- **ChunkRenderer uses color placeholders** — Terrain types are color-coded (grass=green, dirt=brown, stone=gray, water=blue) until texture atlases are added in Step 8.
+- **World tsconfig includes `"dom"`** for Three.js renderer.
+
+**Impact on future steps:**
+
+- **Step 8 (renderer):** Consume `ChunkRenderer` for tile rendering. Replace color placeholders with texture atlas. Add water UV animation. Use `screenToTile()` for click-to-move. Use `findPath()` for player movement.
+- **Step 9 (UI):** Minimap can iterate `createBriarwoodMap().tiles` directly to render 1px-per-tile overview. Fog-of-war uses `world.exploredTiles` from game state.
+- **Step 10 (quests):** Quest NPCs need tile positions in the town area. Spawn zones define where kill-quest monsters live.
 
 ---
 
