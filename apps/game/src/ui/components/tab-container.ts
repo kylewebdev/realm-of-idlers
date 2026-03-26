@@ -12,12 +12,23 @@ const TABS: { id: TabId; label: string; key: string }[] = [
 
 export function createTabContainer(container: HTMLElement): () => void {
   container.innerHTML = `
-    <div class="tab-bar"></div>
+    <div class="tab-header">
+      <div class="tab-bar"></div>
+      <button class="tab-toggle" title="Toggle panel">▼</button>
+    </div>
     <div class="tab-content"></div>
   `;
 
   const tabBar = container.querySelector(".tab-bar")!;
   const tabContent = container.querySelector(".tab-content")!;
+  const toggleBtn = container.querySelector(".tab-toggle") as HTMLElement;
+
+  let collapsed = false;
+  toggleBtn.addEventListener("click", () => {
+    collapsed = !collapsed;
+    tabContent.classList.toggle("collapsed", collapsed);
+    toggleBtn.textContent = collapsed ? "▲" : "▼";
+  });
 
   // Build tab buttons
   for (const tab of TABS) {
@@ -25,7 +36,14 @@ export function createTabContainer(container: HTMLElement): () => void {
     btn.className = "tab-btn";
     btn.dataset.tab = tab.id;
     btn.textContent = `${tab.label} (${tab.key})`;
-    btn.addEventListener("click", () => uiStore.getState().setTab(tab.id));
+    btn.addEventListener("click", () => {
+      if (collapsed) {
+        collapsed = false;
+        tabContent.classList.remove("collapsed");
+        toggleBtn.textContent = "▼";
+      }
+      uiStore.getState().setTab(tab.id);
+    });
     tabBar.appendChild(btn);
   }
 

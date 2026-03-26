@@ -80,9 +80,29 @@ body {
   border-radius: 6px;
 }
 
-.tab-bar {
+.tab-header {
   display: flex;
   border-bottom: 1px solid var(--border-stone);
+}
+
+.tab-bar {
+  display: flex;
+  flex: 1;
+}
+
+.tab-toggle {
+  background: none;
+  border: none;
+  border-left: 1px solid var(--border-stone);
+  color: rgba(244, 228, 193, 0.5);
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.tab-toggle:hover {
+  color: var(--accent-gold);
+  background: rgba(201, 168, 76, 0.1);
 }
 
 .tab-btn {
@@ -110,6 +130,10 @@ body {
 .tab-content {
   overflow-y: auto;
   flex: 1;
+}
+
+.tab-content.collapsed {
+  display: none;
 }
 
 .tab-panel {
