@@ -79,6 +79,9 @@ importers:
 
   packages/combat:
     dependencies:
+      '@realm-of-idlers/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@realm-of-idlers/items':
         specifier: workspace:*
         version: link:../items

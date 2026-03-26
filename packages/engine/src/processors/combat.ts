@@ -3,14 +3,18 @@ import { emptyTickResult } from "../helpers.js";
 import type { TickContext, TickResult } from "../types.js";
 
 /**
- * Placeholder combat processor. Will be replaced when packages/combat
- * is implemented in Step 6.
+ * Combat processor — delegates to the injected `processCombatTick` function
+ * if available. Falls back to idle with a notification if combat is not wired up.
  */
 export function processCombat(
-  _state: GameState,
-  _action: CombatAction,
-  _ctx: TickContext,
+  state: GameState,
+  action: CombatAction,
+  ctx: TickContext,
 ): TickResult {
+  if (ctx.processCombatTick) {
+    return ctx.processCombatTick(state, action);
+  }
+
   const result = emptyTickResult();
   result.notifications.push({
     type: "milestone",

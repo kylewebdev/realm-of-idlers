@@ -1,6 +1,8 @@
 import type {
+  CombatAction,
   CombatEvent,
   GameNotification,
+  GameState,
   ActionEntry,
   ItemStack,
   ItemId,
@@ -52,6 +54,8 @@ export interface TickContext {
     gather: Record<string, GatherActivityDef>;
     craft: Record<string, CraftActivityDef>;
   };
+  /** Injected combat processor — provided by packages/combat via app bridge. */
+  processCombatTick?: (state: GameState, action: CombatAction) => TickResult;
 }
 
 // ---------------------------------------------------------------------------

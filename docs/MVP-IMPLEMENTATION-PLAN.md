@@ -462,7 +462,7 @@ Define all MVP activities:
 
 ---
 
-## Step 6: `packages/combat` — Combat System
+## Step 6: `packages/combat` — Combat System ✅
 
 **Goal:** Implement idle auto-combat with the 3 combat skills.
 
@@ -538,6 +538,25 @@ else:
 - Death resets position and deducts gold
 - Loot table weights sum correctly, all items resolvable
 - Monster kill grants correct XP split (Attack, Strength, Hitpoints)
+
+### Implementation Notes
+
+**Key decisions:**
+
+- **Dependency injection via `TickContext.processCombatTick`** — Engine can't depend on combat (would create state→engine→combat→state cycle). Instead, `TickContext` has an optional `processCombatTick?: (state, action) => TickResult` callback. The app bridge populates this using `createCombatProcessor()` from packages/combat. Engine's `processCombat()` calls it if available, falls back to "not available" otherwise.
+- **`CombatAction` extended with runtime state** — Added optional `monsterCurrentHp` and `tickCounter` fields to track combat state across ticks. Initialized on first tick, updated via `TickResult.updatedAction` each tick.
+- **Combat rounds every 4 ticks (2.4s)** — Tick counter increments each tick; combat round resolves when counter reaches 4, then resets.
+- **Injectable RNG** — All randomized functions (`rollLoot`, `createCombatProcessor`) accept an optional `rng: () => number` parameter for deterministic testing.
+- **XP minimum of 1** — `Math.max(1, Math.floor(monster.hp / N))` ensures even weak monsters (chicken HP=3) grant at least 1 XP per skill on kill.
+- **Player HP simplified** — Uses `hitpoints.level` as both current and max HP for each combat round. Full HP tracking across rounds would require additional state in `CombatAction`.
+- **Gold drops** — Stored as `{ itemId: "gold", quantity: N }` in loot. The app bridge should convert gold drops to player gold (not inventory items). Currently gold drops appear in `itemsGained` for the loot event.
+- **Engine dependency added to combat** — For importing `TickResult` type. No circular dep (combat→engine→shared is linear).
+
+**Impact on future steps:**
+
+- **Step 8 (app bridge):** Must call `createCombatProcessor(MONSTERS, ITEMS)` and set it on the `TickContext` as `processCombatTick`. Also handle gold drops from combat (convert `gold` itemId in `itemsGained` to `player.gold` increase).
+- **Step 9 (UI):** Combat events in `TickResult.combatEvents` can drive damage number display, hit/miss animations. Monster death events include `itemsDropped` for loot popups.
+- **Step 10 (Quests):** Kill-count quest objectives should track monster deaths from combat events. The `"Pest Control"` quest (kill 20 rats) needs to count `CombatEvent { type: "death", source: "monster" }` events.
 
 ---
 

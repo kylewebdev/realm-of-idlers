@@ -72,6 +72,8 @@ export interface CraftAction {
 export interface CombatAction {
   type: "combat";
   monsterId: string;
+  monsterCurrentHp?: number;
+  tickCounter?: number;
 }
 
 export interface IdleAction {
