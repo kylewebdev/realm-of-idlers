@@ -1,0 +1,180 @@
+:root {
+  --bg: #1a1a2e;
+  --panel: #2a2a3e;
+  --border: #3a3a5e;
+  --text: #e0e0e0;
+  --accent: #c9a84c;
+  --active: #4a9c3f;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  background: var(--bg);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  color: var(--text);
+  font-size: 13px;
+}
+
+#editor-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+/* ─── Toolbar ─── */
+#toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  padding: 4px 8px;
+  gap: 8px;
+}
+
+.toolbar-tools,
+.toolbar-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.tool-btn,
+.toolbar-actions button {
+  padding: 5px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tool-btn:hover,
+.toolbar-actions button:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.tool-btn.active {
+  background: rgba(201, 168, 76, 0.25);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+/* ─── Main Layout ─── */
+#editor-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ─── Palette Panel (left) ─── */
+#palette-panel {
+  width: 200px;
+  background: var(--panel);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.palette-section {
+  margin-bottom: 16px;
+}
+
+.palette-section h3 {
+  font-size: 12px;
+  color: var(--accent);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.palette-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.palette-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  color: var(--text);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.palette-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.palette-btn.active {
+  background: rgba(201, 168, 76, 0.15);
+  border-color: var(--accent);
+}
+
+.palette-swatch {
+  width: 14px;
+  height: 14px;
+  border-radius: 2px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  flex-shrink: 0;
+}
+
+.palette-section label {
+  display: block;
+  padding: 3px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.palette-section label input {
+  margin-right: 6px;
+}
+
+/* ─── Canvas ─── */
+#canvas-container {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+}
+
+#editor-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+/* ─── Properties Panel (right) ─── */
+#properties-panel {
+  width: 200px;
+  background: var(--panel);
+  border-left: 1px solid var(--border);
+  overflow-y: auto;
+  padding: 8px;
+  font-size: 12px;
+}
+
+/* ─── Status Bar ─── */
+#status-bar {
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+  padding: 4px 12px;
+  font-size: 11px;
+  color: rgba(224, 224, 224, 0.6);
+  display: flex;
+  gap: 16px;
+}
