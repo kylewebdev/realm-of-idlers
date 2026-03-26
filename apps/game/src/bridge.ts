@@ -278,6 +278,12 @@ export async function init(): Promise<void> {
       pendingActivity = null; // cancel pending if clicking elsewhere
       movementPath = path;
       movementIndex = 1;
+      // Stop current activity when player moves away
+      const action = gameStore.getState().actionQueue[0];
+      if (action && action.type !== "idle") {
+        gameStore.getState().setAction({ type: "idle" });
+        pushNotification("Stopped activity — moving away.");
+      }
     },
     (tile, coord) => {
       if (tile.resourceNode) {
