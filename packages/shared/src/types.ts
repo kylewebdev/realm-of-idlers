@@ -10,7 +10,8 @@ export type SkillType =
   | "cooking"
   | "attack"
   | "strength"
-  | "hitpoints";
+  | "hitpoints"
+  | "stamina";
 
 // ---------------------------------------------------------------------------
 // Item system

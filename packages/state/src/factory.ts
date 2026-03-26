@@ -2,7 +2,7 @@ import { BANK_SLOTS, INVENTORY_SLOTS } from "@realm-of-idlers/shared";
 import type { ItemStack, SkillType } from "@realm-of-idlers/shared";
 import type { GameState } from "./types.js";
 
-export const CURRENT_SAVE_VERSION = 1;
+export const CURRENT_SAVE_VERSION = 2;
 
 const ALL_SKILLS: SkillType[] = [
   "woodcutting",
@@ -13,6 +13,7 @@ const ALL_SKILLS: SkillType[] = [
   "attack",
   "strength",
   "hitpoints",
+  "stamina",
 ];
 
 function defaultSkills(): GameState["skills"] {

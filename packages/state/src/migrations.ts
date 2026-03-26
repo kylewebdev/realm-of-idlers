@@ -8,8 +8,14 @@ type MigrationFn = (state: Record<string, unknown>) => Record<string, unknown>;
  * then add an entry here: `migrations[oldVersion] = (state) => newState`.
  */
 const migrations: Record<number, MigrationFn> = {
-  // Example for future use:
-  // 1: (state) => ({ ...state, newField: "default", version: 2 }),
+  // v1 → v2: Add stamina skill
+  1: (state) => {
+    const skills = state.skills as Record<string, { level: number; xp: number }>;
+    if (!skills.stamina) {
+      skills.stamina = { level: 1, xp: 0 };
+    }
+    return { ...state, skills, version: 2 };
+  },
 };
 
 /**

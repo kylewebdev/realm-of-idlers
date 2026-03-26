@@ -96,6 +96,19 @@ export const SKILLS: Record<SkillType, SkillDef> = {
       { level: 20, description: "Hitpoints milestone: level 20" },
     ],
   },
+  stamina: {
+    type: "stamina",
+    name: "Stamina",
+    category: "support",
+    milestones: [
+      { level: 1, description: "Base movement speed" },
+      { level: 10, description: "Noticeably faster movement" },
+      { level: 25, description: "Stamina milestone: level 25" },
+      { level: 50, description: "Half-way to max speed" },
+      { level: 75, description: "Stamina milestone: level 75" },
+      { level: 99, description: "Maximum movement speed" },
+    ],
+  },
 };
 
 /** Look up a skill definition by type. */

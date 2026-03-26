@@ -22,6 +22,12 @@ export const INVENTORY_SLOTS = 28;
 /** Bank slot count */
 export const BANK_SLOTS = 100;
 
+/** Base delay between tile movements in ms (stamina level 1) */
+export const BASE_MOVE_DELAY_MS = 200;
+
+/** Minimum delay between tile movements in ms (stamina level 99) */
+export const MIN_MOVE_DELAY_MS = 80;
+
 /** Auto-save interval in milliseconds */
 export const AUTO_SAVE_INTERVAL_MS = 30_000;
 
