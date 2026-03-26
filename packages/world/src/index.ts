@@ -13,7 +13,7 @@ export type {
 export { createBriarwoodMap, getTile, isWalkable } from "./briarwood.js";
 
 // Pathfinding
-export { findPath } from "./pathfinding.js";
+export { findPath, findPathToAdjacent } from "./pathfinding.js";
 
 // Chunks
 export { tileToChunk, getChunkTiles, getVisibleChunks } from "./chunks.js";

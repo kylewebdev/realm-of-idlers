@@ -1,6 +1,6 @@
 import type { TileCoord } from "@realm-of-idlers/shared";
 import type { TileMap } from "./types.js";
-import { isWalkable } from "./briarwood.js";
+import { isWalkable, getTile } from "./briarwood.js";
 
 const DEFAULT_MAX_LENGTH = 50;
 
@@ -56,6 +56,9 @@ export function findPath(
     closedSet.add(currentKey);
 
     // Explore 4 neighbors
+    const currentTile = getTile(tiles, current.col, current.row);
+    const currentElev = currentTile?.elevation ?? 0;
+
     for (const [dc, dr] of DIRECTIONS) {
       const nc = current.col + dc;
       const nr = current.row + dr;
@@ -63,6 +66,11 @@ export function findPath(
 
       if (closedSet.has(nKey)) continue;
       if (!isWalkable(tiles, nc, nr)) continue;
+
+      // Only allow stepping up/down by 1 elevation at a time
+      const neighborTile = getTile(tiles, nc, nr);
+      const neighborElev = neighborTile?.elevation ?? 0;
+      if (Math.abs(neighborElev - currentElev) > 1) continue;
 
       const g = current.g + 1;
       const existing = openSet.get(nKey);
@@ -76,6 +84,38 @@ export function findPath(
   }
 
   return null;
+}
+
+/**
+ * Find a path to the nearest walkable tile adjacent to a non-walkable target.
+ * Used for interacting with entities (trees, ores, structures) that block movement.
+ * Returns the path to the best adjacent tile, or null if none reachable.
+ */
+export function findPathToAdjacent(
+  tiles: TileMap,
+  from: TileCoord,
+  target: TileCoord,
+  maxLength: number = DEFAULT_MAX_LENGTH,
+): TileCoord[] | null {
+  // If the target itself is walkable, just path directly
+  if (isWalkable(tiles, target.col, target.row)) {
+    return findPath(tiles, from, target, maxLength);
+  }
+
+  // Try all 4 neighbors of the target, pick the one with the shortest path
+  let bestPath: TileCoord[] | null = null;
+  for (const [dc, dr] of DIRECTIONS) {
+    const nc = target.col + dc;
+    const nr = target.row + dr;
+    if (!isWalkable(tiles, nc, nr)) continue;
+
+    const path = findPath(tiles, from, { col: nc, row: nr }, maxLength);
+    if (path && (!bestPath || path.length < bestPath.length)) {
+      bestPath = path;
+    }
+  }
+
+  return bestPath;
 }
 
 // ---------------------------------------------------------------------------

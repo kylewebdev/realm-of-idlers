@@ -80,25 +80,25 @@ function carveTown(tiles: TileMap): void {
   setTile(tiles, col(29), row(28), {
     terrain: "stone",
     elevation: 0,
-    walkable: true,
+    walkable: false,
     structure: "shop",
   });
   setTile(tiles, col(34), row(28), {
     terrain: "stone",
     elevation: 0,
-    walkable: true,
+    walkable: false,
     structure: "bank",
   });
   setTile(tiles, col(29), row(35), {
     terrain: "stone",
     elevation: 0,
-    walkable: true,
+    walkable: false,
     structure: "forge",
   });
   setTile(tiles, col(34), row(35), {
     terrain: "stone",
     elevation: 0,
-    walkable: true,
+    walkable: false,
     structure: "cooking-range",
   });
 }
@@ -111,7 +111,7 @@ function carveForests(tiles: TileMap): void {
       setTile(tiles, col, row, {
         terrain: "grass",
         elevation: 0,
-        walkable: true,
+        walkable: false,
         resourceNode: { activityId: "chop-normal-tree", nodeId: `tree-normal-${nodeCounter++}` },
       });
     }
@@ -123,7 +123,7 @@ function carveForests(tiles: TileMap): void {
       setTile(tiles, col, row, {
         terrain: "grass",
         elevation: 0,
-        walkable: true,
+        walkable: false,
         resourceNode: { activityId: "chop-oak-tree", nodeId: `tree-oak-${nodeCounter++}` },
       });
     }
@@ -155,7 +155,7 @@ function carveMiningArea(tiles: TileMap): void {
     setTile(tiles, c, r, {
       terrain: "stone",
       elevation: 1,
-      walkable: true,
+      walkable: false,
       resourceNode: { activityId: "mine-copper", nodeId: `rock-copper-${nodeCounter++}` },
     });
   }
@@ -169,7 +169,7 @@ function carveMiningArea(tiles: TileMap): void {
     setTile(tiles, c, r, {
       terrain: "stone",
       elevation: 1,
-      walkable: true,
+      walkable: false,
       resourceNode: { activityId: "mine-tin", nodeId: `rock-tin-${nodeCounter++}` },
     });
   }
@@ -184,7 +184,7 @@ function carveMiningArea(tiles: TileMap): void {
     setTile(tiles, c, r, {
       terrain: "stone",
       elevation: 2,
-      walkable: true,
+      walkable: false,
       resourceNode: { activityId: "mine-iron", nodeId: `rock-iron-${nodeCounter++}` },
     });
   }
@@ -198,7 +198,7 @@ function carveRiver(tiles: TileMap): void {
     }
   }
 
-  // Fishing spots on river edges (walkable tiles adjacent to water)
+  // Fishing spots on river edges (non-walkable entities adjacent to water)
   let nodeCounter = 0;
   for (const [c, r] of [
     [15, 47],
@@ -212,7 +212,7 @@ function carveRiver(tiles: TileMap): void {
     setTile(tiles, c, r, {
       terrain: "grass",
       elevation: 0,
-      walkable: true,
+      walkable: false,
       resourceNode: { activityId: "fish-shrimp", nodeId: `fishing-${nodeCounter++}` },
     });
   }
@@ -225,7 +225,7 @@ function carveRiver(tiles: TileMap): void {
     setTile(tiles, c, r, {
       terrain: "grass",
       elevation: 0,
-      walkable: true,
+      walkable: false,
       resourceNode: { activityId: "fish-trout", nodeId: `fishing-trout-${nodeCounter++}` },
     });
   }
