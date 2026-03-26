@@ -188,7 +188,7 @@ interface GameState {
 
 ---
 
-## Step 3: `packages/engine` — Game Loop & Tick System
+## Step 3: `packages/engine` — Game Loop & Tick System ✅
 
 **Goal:** Build the core tick loop that drives all gameplay, independent of rendering.
 
@@ -255,6 +255,26 @@ tick() → resolve current action
 - `applyTickResult` correctly levels up skill when XP threshold crossed
 - Offline sim for N ticks matches N sequential `tick()` calls
 - Action cycle progress accumulates correctly across ticks
+
+### Implementation Notes
+
+**Key decisions:**
+
+- **GameState types moved to `packages/shared`** — `GameState`, `InventoryState`, `EquipmentState`, `BankState`, `QuestStatus`, and `PlayerSettings` were moved from `packages/state/src/types.ts` to `packages/shared/src/types.ts`. This avoids a circular dependency (state depends on engine, so engine cannot import from state). State re-exports them for backwards compatibility.
+- **XP functions moved to `packages/shared`** — `xpForLevel`, `levelForXp`, `xpToNextLevel` and the pre-computed `XP_TABLE` were moved from `packages/state/src/xp-table.ts` to `packages/shared/src/xp-table.ts` for the same reason. State re-exports them.
+- **`TickContext` registry pattern** — `tick()` signature is `tick(state: GameState, ctx: TickContext)`. Activity definitions (`GatherActivityDef`, `CraftActivityDef`) are injected via `TickContext` rather than imported, so engine stays decoupled from the future `packages/skills` package. Step 5 should populate this registry.
+- **`TickResult.updatedAction`** — The tick result includes an `updatedAction: ActionEntry | null` field that the apply step writes back to `actionQueue`. This is how tick countdown (`ticksRemaining`) is decremented and how processors signal auto-restart or fall back to idle.
+- **Two apply variants** — `applyTickResult()` (immutable, clones via `structuredClone`) for real-time use, and `applyTickResultMut()` (mutates in-place) for offline simulation performance.
+- **`GameLoop` constructor** takes `getState`, `setState`, `ctx`, and callbacks — it owns the tick→apply→setState cycle. The app bridge provides `getState`/`setState` wired to the Zustand store.
+- **Combat is a placeholder** — `processCombat()` immediately returns idle with a "not yet available" notification. Step 6 should replace this with real combat logic, potentially via an optional `combatProcessor` callback in `TickContext`.
+- **Engine tsconfig includes `"dom"`** in `lib` for `GameLoop` (uses `requestAnimationFrame`, `document`, `performance`).
+
+**Impact on future steps:**
+
+- **Step 4 (items):** Inventory helpers (`addItemToInventory`, `removeItemFromInventory`, `hasItems`, `countFreeSlots`) are exported from `packages/engine/src/helpers.ts`. The items package may want its own pure inventory operations — consider whether to share or duplicate. Engine helpers treat all items as stackable for simplicity.
+- **Step 5 (skills):** Must produce a `TickContext` object with `activities.gather` and `activities.craft` registries keyed by activity ID. The `GatherActivityDef` and `CraftActivityDef` interfaces are exported from `packages/engine`.
+- **Step 6 (combat):** Replace `processCombat()` placeholder. Consider adding a `combatResolver` callback to `TickContext` so combat logic lives in `packages/combat` but is invoked by the engine.
+- **Step 8 (app bridge):** Wire `GameLoop` with `getState: () => gameStore.getState()`, `setState: (s) => gameStore.getState().loadState(s)`, and a populated `TickContext`. Also wire `startAutoSave` and `registerExitSave` on startup. Offline catch-up on initial load should use `simulateOffline()` with ticks computed from `timestamps.lastTick`.
 
 ---
 
