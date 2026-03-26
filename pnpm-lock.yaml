@@ -148,6 +148,9 @@ importers:
 
   packages/skills:
     dependencies:
+      '@realm-of-idlers/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@realm-of-idlers/shared':
         specifier: workspace:*
         version: link:../shared

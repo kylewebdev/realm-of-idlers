@@ -366,7 +366,7 @@ hasItem(inventory, itemId, qty)     → boolean
 
 ---
 
-## Step 5: `packages/skills` — Skill System & Activities
+## Step 5: `packages/skills` — Skill System & Activities ✅
 
 **Goal:** Define skills, XP curves, and the activity registry that the engine processes.
 
@@ -442,6 +442,23 @@ Define all MVP activities:
 - `levelForXp` is inverse of `xpForLevel`
 - Activity lookup by skill and level returns correct available activities
 - Activity requirements validated (level, tool, inputs)
+
+### Implementation Notes
+
+**Key decisions:**
+
+- **XP functions not duplicated** — `xpForLevel`, `levelForXp`, `xpToNextLevel` already live in `packages/shared/src/xp-table.ts` (moved there in Step 3). Skills package does not re-export them — consumers import from shared directly.
+- **`SkillDef` does not include `xpCurve`** — The plan specified `xpCurve: (level: number) => number` per skill, but all skills use the same RuneScape formula. Since the curve is shared and already in `packages/shared`, there's no per-skill curve function. If custom curves are needed later, add it then.
+- **Engine dependency added** — `packages/skills/package.json` depends on `@realm-of-idlers/engine` to import `GatherActivityDef`, `CraftActivityDef`, `TickContext` types directly. No circular dependency (skills → engine → shared is linear).
+- **`createTickContext()`** — Factory function that returns a populated `TickContext` ready to pass to `tick()`. This is the bridge between the skills data and the engine.
+- **Helper functions** — `getActivitiesForSkill(skill)` and `getAvailableActivities(skill, level)` for UI to query what a player can do.
+- **13 activities total** — 7 gather (woodcutting ×2, mining ×3, fishing ×2) + 6 craft (smithing ×4, cooking ×2). Matches the plan table exactly.
+
+**Impact on future steps:**
+
+- **Step 6 (combat):** Combat skills (attack, strength, hitpoints) have no activities yet — they gain XP from combat rounds, not from the activity system.
+- **Step 8 (app bridge):** Call `createTickContext()` on startup and pass to `GameLoop`. When skills package adds new activities, no engine changes needed.
+- **Step 9 (UI):** Use `getActivitiesForSkill()` and `getAvailableActivities()` to populate skill detail modals with "Start" buttons for each available activity.
 
 ---
 
