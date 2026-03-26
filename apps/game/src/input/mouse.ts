@@ -199,8 +199,20 @@ export function setupMouseInput(
     }
   };
 
+  // Touch support: convert touch to click coordinates
+  const onTouchStart = (event: TouchEvent) => {
+    if (event.touches.length !== 1) return;
+    const touch = event.touches[0]!;
+    // Synthesize a MouseEvent-like object for toNdc and onClick
+    const synth = { clientX: touch.clientX, clientY: touch.clientY } as MouseEvent;
+    onClick(synth);
+    // Hide tooltip on touch since there's no hover
+    hideTooltip();
+  };
+
   canvas.addEventListener("click", onClick);
   canvas.addEventListener("mousemove", onMouseMove);
+  canvas.addEventListener("touchstart", onTouchStart, { passive: true });
 
   // Hide tooltip and highlight when a modal opens
   const unsubModal = uiStore.subscribe(() => {
@@ -215,6 +227,7 @@ export function setupMouseInput(
   return () => {
     canvas.removeEventListener("click", onClick);
     canvas.removeEventListener("mousemove", onMouseMove);
+    canvas.removeEventListener("touchstart", onTouchStart);
     unsubModal();
     sceneCtx.scene.remove(highlightMesh);
     highlightGeo.dispose();

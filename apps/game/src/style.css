@@ -570,3 +570,159 @@ body {
     transform: translateY(-60px);
   }
 }
+
+/* ─── Mobile / Small Screens ─── */
+@media (max-width: 768px) {
+  #ui-overlay {
+    font-size: 12px;
+  }
+
+  /* HUD: smaller text, tighter padding */
+  #hud-top {
+    padding: 6px 10px;
+    font-size: 12px;
+    gap: 8px;
+  }
+
+  /* Tab panel: full width at bottom */
+  #panel-tabs {
+    bottom: 0;
+    right: 0;
+    left: 0;
+    width: auto;
+    max-height: 40vh;
+    border-radius: 6px 6px 0 0;
+    border-bottom: none;
+  }
+
+  .tab-btn {
+    padding: 8px 4px;
+    font-size: 12px;
+  }
+
+  .inventory-grid {
+    grid-template-columns: repeat(7, 1fr);
+    gap: 3px;
+    padding: 8px;
+  }
+
+  .inv-slot {
+    font-size: 9px;
+    min-height: 36px;
+  }
+
+  /* Action panel: above the tab panel */
+  #panel-action {
+    bottom: auto;
+    top: 38px;
+    left: 8px;
+    right: 8px;
+    width: auto;
+    transform: none;
+    padding: 8px 12px;
+  }
+
+  /* Event log: above tab panel, smaller */
+  #event-log {
+    bottom: auto;
+    top: 80px;
+    left: 8px;
+    width: 200px;
+    max-height: 100px;
+    font-size: 10px;
+    padding: 4px 6px;
+  }
+
+  /* Minimap: smaller on mobile */
+  #minimap {
+    top: 38px;
+    right: 8px;
+  }
+
+  #minimap canvas {
+    max-width: 120px;
+    max-height: 120px;
+  }
+
+  /* Modals: nearly full screen on mobile */
+  .modal-content {
+    width: calc(100vw - 24px) !important;
+    max-height: 85vh;
+    top: 50%;
+  }
+
+  .modal-header {
+    padding: 10px 12px;
+  }
+
+  .modal-header h2 {
+    font-size: 16px;
+  }
+
+  .modal-body {
+    padding: 12px;
+  }
+
+  .modal-close {
+    font-size: 26px;
+    padding: 4px 8px;
+  }
+
+  /* Bank: stack columns vertically on mobile */
+  .bank-layout {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .bank-grid {
+    grid-template-columns: repeat(6, 1fr);
+  }
+
+  /* Larger touch targets for buttons */
+  .btn-start,
+  .btn-continue {
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+
+  .activity-row {
+    padding: 10px;
+  }
+
+  .shop-row {
+    padding: 8px 10px;
+  }
+
+  /* Equipment: larger tap targets */
+  .equip-slot-large {
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+
+  .skill-row {
+    padding: 8px 12px;
+  }
+}
+
+/* Extra small screens (phones in portrait) */
+@media (max-width: 480px) {
+  #minimap {
+    display: none;
+  }
+
+  #event-log {
+    display: none;
+  }
+
+  #panel-tabs {
+    max-height: 45vh;
+  }
+
+  .inventory-grid {
+    grid-template-columns: repeat(5, 1fr);
+  }
+
+  .bank-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
