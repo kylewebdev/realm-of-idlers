@@ -10,7 +10,7 @@ A playable vertical slice: one region (Briarwood), 8 skills, idle progression, c
 
 ---
 
-## Step 0: Project Scaffolding
+## Step 0: Project Scaffolding ✅
 
 **Goal:** Transform the current Vite+ monorepo scaffold into the architecture's package structure.
 
@@ -62,7 +62,7 @@ apps/game/public/assets/
 
 ---
 
-## Step 1: `packages/shared` — Types & Constants
+## Step 1: `packages/shared` — Types & Constants ✅
 
 **Goal:** Define the cross-cutting types and constants that all packages depend on.
 
@@ -111,7 +111,7 @@ const CHUNK_SIZE = 8;
 
 ---
 
-## Step 2: `packages/state` — Game State & Persistence
+## Step 2: `packages/state` — Game State & Persistence ✅
 
 **Goal:** Define the state schema, Zustand store, and save/load system.
 
@@ -166,6 +166,25 @@ interface GameState {
 - Save → load round-trip preserves all fields
 - Migration from v1 → v2 applies transforms correctly
 - Selectors compute correct derived values
+
+### Implementation Notes
+
+**Key decisions:**
+
+- **Zustand vanilla store** (`zustand/vanilla`'s `createStore`), not `zustand`'s `create` — avoids a React dependency in this package. Future steps that need React hooks should wrap with `useStore(gameStore, selector)` in `apps/game`.
+- **`enableMapSet()` from Immer** is called at module load in `store.ts` because `world.exploredTiles` is a `Set<string>`. Any future package that drafts Maps/Sets via Immer must also call this or import `store.ts` first.
+- **Manual persistence** (no Zustand `persist` middleware) — `Set<string>` is serialized as `{ __type: "Set", values: [...] }` in JSON. Custom serializer/deserializer in `persistence.ts`.
+- **Hitpoints starts at level 10** (1,154 XP) following RuneScape convention. Other skills start at level 1 / 0 XP.
+- **Selectors are pure functions** `(state) => value`, not store hooks — usable from both React (`useStore(gameStore, selector)`) and engine code (`selector(gameStore.getState())`).
+- **`packages/state/tsconfig.json`** includes `"dom"` in `lib` for `localStorage`, `indexedDB`, and `window` types. Other non-browser packages (engine, shared) do not include DOM types.
+- **Event-triggered saves** (on level up, quest complete) are not yet wired — the store actions don't auto-save. This should be connected in Step 3 (engine) or Step 8 (app bridge) via store subscriptions.
+
+**Impact on future steps:**
+
+- **Step 3 (engine):** `tick()` should read state via `gameStore.getState()` and apply results via store actions (`addXp`, `setAction`, etc.). The engine package does _not_ depend on state (no circular dep) — pass state as a parameter to `tick()`.
+- **Step 4 (items):** Inventory operations should be pure functions over `InventoryState` (28-slot `(ItemStack | null)[]` array). Add corresponding store actions when integrating.
+- **Step 5 (skills):** XP curve functions (`xpForLevel`, `levelForXp`, `xpToNextLevel`) are exported from `packages/state`, not `packages/skills`. Skills package should import from state or these should be moved to shared if needed by skills independently.
+- **Step 8 (app bridge):** Wire `startAutoSave(gameStore.getState)` and `registerExitSave(gameStore.getState)` on app startup. Event-saves should use `gameStore.subscribe()`.
 
 ---
 
