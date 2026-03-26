@@ -2346,7 +2346,7 @@
       { "terrain": "stone", "elevation": 0 },
       { "terrain": "dirt", "elevation": 0 },
       { "terrain": "stone", "elevation": 0 },
-      { "terrain": "stone", "elevation": 0 },
+      { "terrain": "grass", "elevation": 0 },
       { "terrain": "stone", "elevation": 0 },
       { "terrain": "stone", "elevation": 0 },
       { "terrain": "grass", "elevation": 0 },
@@ -2680,9 +2680,9 @@
       { "terrain": "grass", "elevation": 0 },
       { "terrain": "grass", "elevation": 0 },
       { "terrain": "grass", "elevation": 0 },
-      { "terrain": "grass", "elevation": 0 },
-      { "terrain": "grass", "elevation": 0 },
-      { "terrain": "grass", "elevation": 0 },
+      { "terrain": "grass", "elevation": 3 },
+      { "terrain": "grass", "elevation": 2 },
+      { "terrain": "grass", "elevation": 1 },
       { "terrain": "grass", "elevation": 0 },
       { "terrain": "grass", "elevation": 0 },
       { "terrain": "grass", "elevation": 0 },
@@ -4984,13 +4984,6 @@
       "interaction": { "kind": "structure", "structureType": "shop" }
     },
     {
-      "col": 34,
-      "row": 28,
-      "typeId": "bank",
-      "blocking": true,
-      "interaction": { "kind": "structure", "structureType": "bank" }
-    },
-    {
       "col": 48,
       "row": 30,
       "typeId": "copper-rock",
@@ -5045,13 +5038,6 @@
       "typeId": "forge",
       "blocking": true,
       "interaction": { "kind": "structure", "structureType": "forge" }
-    },
-    {
-      "col": 34,
-      "row": 35,
-      "typeId": "cooking-range",
-      "blocking": true,
-      "interaction": { "kind": "structure", "structureType": "cooking-range" }
     },
     {
       "col": 50,
@@ -5150,9 +5136,33 @@
       "typeId": "fishing-spot-shrimp",
       "blocking": true,
       "interaction": { "kind": "resource", "activityId": "fish-shrimp", "nodeId": "fishing-6" }
-    }
+    },
+    {
+      "col": 34,
+      "row": 28,
+      "typeId": "bank",
+      "blocking": true,
+      "interaction": { "kind": "structure", "structureType": "bank" }
+    },
+    {
+      "col": 34,
+      "row": 35,
+      "typeId": "cooking-range",
+      "blocking": true,
+      "interaction": { "kind": "structure", "structureType": "cooking-range" }
+    },
+    { "col": 27, "row": 39, "typeId": "tin-rock", "blocking": true },
+    { "col": 24, "row": 41, "typeId": "tin-rock", "blocking": true }
   ],
-  "walls": [],
+  "walls": [
+    { "col": 24, "row": 38, "edge": "south", "wallTypeId": "wooden-wall" },
+    { "col": 23, "row": 38, "edge": "south", "wallTypeId": "wooden-wall" },
+    { "col": 22, "row": 38, "edge": "south", "wallTypeId": "wooden-wall" },
+    { "col": 24, "row": 38, "edge": "east", "wallTypeId": "fence" },
+    { "col": 25, "row": 37, "edge": "west", "wallTypeId": "fence" },
+    { "col": 24, "row": 36, "edge": "north", "wallTypeId": "fence" },
+    { "col": 24, "row": 36, "edge": "east", "wallTypeId": "fence" }
+  ],
   "spawnZones": [
     {
       "monsterId": "chicken",
