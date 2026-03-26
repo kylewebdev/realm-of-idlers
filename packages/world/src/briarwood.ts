@@ -255,6 +255,13 @@ function carvePaths(tiles: TileMap): void {
       setTile(tiles, col, 36, { ...tile, terrain: "dirt", walkable: true });
     }
   }
+
+  // Bridge crossing the river at col 31-33 (3-wide), rows 48-51
+  for (let row = 48; row <= 51; row++) {
+    for (let col = 31; col <= 33; col++) {
+      setTile(tiles, col, row, { terrain: "dirt", elevation: 0, walkable: true });
+    }
+  }
 }
 
 function createSpawnZones() {
