@@ -10,6 +10,7 @@
  */
 
 import { GoogleGenAI } from "@google/genai";
+import sharp from "sharp";
 import { writeFile, mkdir } from "fs/promises";
 import { existsSync } from "fs";
 import path from "path";
@@ -43,6 +44,8 @@ interface AssetDef {
   filename: string;
   dir: string;
   prompt: string;
+  /** Optional reference image path (relative to public/) to include as context. */
+  referenceImage?: string;
 }
 
 // ── Terrain tiles ──
@@ -87,34 +90,41 @@ const TILES: AssetDef[] = [
   {
     filename: "grass-cliff",
     dir: "tiles",
-    prompt: `${CLIFF_PROMPT}. Grassy earth cliff edge, exposed brown dirt layers with grass on top and dangling roots`,
+    referenceImage: "tiles/grass.png",
+    prompt: `${CLIFF_PROMPT}. The attached image is the top-down grass texture. Create a vertical cliff face version using the SAME colors and pixel style. Grassy earth cliff edge, exposed brown dirt layers with grass on top and dangling roots`,
   },
   {
     filename: "dirt-cliff",
     dir: "tiles",
-    prompt: `${CLIFF_PROMPT}. Brown compacted dirt cliff face, visible earth strata layers, embedded stones`,
+    referenceImage: "tiles/dirt.png",
+    prompt: `${CLIFF_PROMPT}. The attached image is the top-down dirt texture. Create a vertical cliff face version using the SAME colors and pixel style. Brown compacted dirt cliff face, visible earth strata layers, embedded stones`,
   },
   {
     filename: "stone-cliff",
     dir: "tiles",
-    prompt: `${CLIFF_PROMPT}. Grey stone quarry cliff face, layered rock strata, pick marks`,
+    referenceImage: "tiles/stone.png",
+    prompt: `${CLIFF_PROMPT}. The attached image is the top-down stone texture. Create a vertical cliff face version using the SAME colors and pixel style. Grey stone quarry cliff face, layered rock strata, pick marks`,
   },
   {
     filename: "water-cliff",
     dir: "tiles",
-    prompt: `${CLIFF_PROMPT}. Dark wet stone cliff, waterline at top, algae and moss, dripping water`,
+    referenceImage: "tiles/water.png",
+    prompt: `${CLIFF_PROMPT}. The attached image is the top-down water texture. Create a vertical cliff face version using the SAME colors and pixel style. Dark wet stone cliff, waterline at top, algae and moss, dripping water`,
   },
 ];
 
 // ── Entity sprites ──
 // Front-facing billboard sprites. The engine faces them toward the camera.
+// IMPORTANT: all sprites must use the EXACT same camera angle for visual consistency.
 const SPRITE_PROMPT = [
   ART_STYLE,
   "single object or character, centered in frame",
-  "front-facing view, not isometric, not top-down",
-  "transparent background",
-  "no ground shadow, no floor, no platform",
+  "straight-on front-facing view at eye level, camera looking directly at the subject",
+  "NOT isometric, NOT top-down, NOT 3/4 angle, NOT angled",
+  "the subject faces the viewer directly",
+  "transparent background, no ground, no shadow, no floor, no platform",
   "crisp pixel edges, clean silhouette",
+  "consistent scale across all sprites in this set",
 ].join(", ");
 
 const SPRITES: AssetDef[] = [
@@ -122,36 +132,36 @@ const SPRITES: AssetDef[] = [
   {
     filename: "player",
     dir: "sprites",
-    prompt: `${SPRITE_PROMPT}. Medieval adventurer in leather armor, brown boots, belt with pouches, idle standing pose facing forward. Resembles an Ultima Online player avatar`,
+    prompt: `${SPRITE_PROMPT}. Medieval adventurer in leather armor, brown boots, belt with pouches, idle standing pose facing the viewer. Resembles an Ultima Online player avatar`,
   },
 
-  // Structures — slightly larger, building-like
+  // Structures — all viewed straight-on from the front, same scale
   {
     filename: "shop",
     dir: "sprites",
-    prompt: `${SPRITE_PROMPT}. Small medieval wooden market stall with striped cloth awning, goods on counter, front view of shop building`,
+    prompt: `${SPRITE_PROMPT}. Small medieval wooden market stall with striped cloth awning, goods on counter, viewed straight-on from the front`,
   },
   {
     filename: "bank",
     dir: "sprites",
-    prompt: `${SPRITE_PROMPT}. Small stone bank building with reinforced iron door, gold coin emblem above door, front view`,
+    prompt: `${SPRITE_PROMPT}. Small stone bank building with reinforced iron door, gold coin emblem above door, viewed straight-on from the front`,
   },
   {
     filename: "forge",
     dir: "sprites",
-    prompt: `${SPRITE_PROMPT}. Blacksmith forge station with anvil, glowing orange furnace opening, stone chimney, front view`,
+    prompt: `${SPRITE_PROMPT}. Blacksmith forge station with anvil, glowing orange furnace opening, stone chimney, viewed straight-on from the front`,
   },
   {
     filename: "cooking-range",
     dir: "sprites",
-    prompt: `${SPRITE_PROMPT}. Medieval stone cooking hearth with iron cooking pot hanging over fire, small orange flames, front view`,
+    prompt: `${SPRITE_PROMPT}. Medieval stone cooking hearth with iron cooking pot hanging over fire, small orange flames, viewed straight-on from the front`,
   },
 
-  // Trees
+  // Trees — both viewed straight-on
   {
     filename: "normal-tree",
     dir: "sprites",
-    prompt: `${SPRITE_PROMPT}. Medium deciduous tree, brown trunk, round green leafy canopy, classic RPG tree sprite`,
+    prompt: `${SPRITE_PROMPT}. Medium deciduous tree, brown trunk, round green leafy canopy, viewed straight-on from the front, classic RPG tree sprite`,
   },
   {
     filename: "oak-tree",
@@ -460,6 +470,100 @@ const ICONS: AssetDef[] = [
 // Generation logic
 // ---------------------------------------------------------------------------
 
+/**
+ * Remove near-white / checkered backgrounds from sprite and icon PNGs.
+ * AI generators often render a faux-transparent checkered pattern as actual pixels.
+ * This flood-fills from corners: any pixel that is light (high luminance) and
+ * low saturation (grey/white) gets set to fully transparent.
+ */
+async function removeBackground(inputBuffer: Buffer): Promise<Buffer> {
+  const image = sharp(inputBuffer).ensureAlpha();
+  const { data, info } = await image.raw().toBuffer({ resolveWithObject: true });
+  const { width, height, channels } = info;
+
+  if (channels !== 4) return inputBuffer;
+
+  const pixels = new Uint8Array(data);
+  const visited = new Uint8Array(width * height);
+  const queue: number[] = [];
+
+  const idx = (x: number, y: number) => (y * width + x) * 4;
+  const flat = (x: number, y: number) => y * width + x;
+
+  /** Check if a pixel looks like background (light, desaturated, or checkered pattern). */
+  function isBackground(i: number): boolean {
+    const r = pixels[i]!;
+    const g = pixels[i + 1]!;
+    const b = pixels[i + 2]!;
+    const a = pixels[i + 3]!;
+
+    // Already transparent
+    if (a < 10) return true;
+
+    // Light grey/white: high brightness, low color variation
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    const lum = (r + g + b) / 3;
+    const saturation = max > 0 ? (max - min) / max : 0;
+
+    // Checkered pattern: alternating light/dark grey squares
+    // Both the light (#FFFFFF/EFEFEF) and dark (#CCCCCC/CDCDCD) squares are desaturated
+    if (lum > 180 && saturation < 0.08) return true;
+    if (lum > 140 && lum < 220 && saturation < 0.05) return true;
+
+    return false;
+  }
+
+  // Seed from all 4 edges
+  for (let x = 0; x < width; x++) {
+    for (const y of [0, height - 1]) {
+      if (isBackground(idx(x, y)) && !visited[flat(x, y)]) {
+        queue.push(x, y);
+        visited[flat(x, y)] = 1;
+      }
+    }
+  }
+  for (let y = 0; y < height; y++) {
+    for (const x of [0, width - 1]) {
+      if (isBackground(idx(x, y)) && !visited[flat(x, y)]) {
+        queue.push(x, y);
+        visited[flat(x, y)] = 1;
+      }
+    }
+  }
+
+  // Flood fill from edges
+  while (queue.length > 0) {
+    const cy = queue.pop()!;
+    const cx = queue.pop()!;
+    const i = idx(cx, cy);
+
+    // Set to transparent
+    pixels[i + 3] = 0;
+
+    // Check 4 neighbors
+    for (const [dx, dy] of [
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ]) {
+      const nx = cx + dx;
+      const ny = cy + dy;
+      if (nx < 0 || nx >= width || ny < 0 || ny >= height) continue;
+      if (visited[flat(nx, ny)]) continue;
+      visited[flat(nx, ny)] = 1;
+      if (isBackground(idx(nx, ny))) {
+        queue.push(nx, ny);
+      }
+    }
+  }
+
+  return sharp(Buffer.from(pixels), { raw: { width, height, channels: 4 } })
+    .png()
+    .toBuffer();
+}
+
 async function ensureDir(dir: string): Promise<void> {
   if (!existsSync(dir)) {
     await mkdir(dir, { recursive: true });
@@ -483,6 +587,26 @@ async function generateAsset(asset: AssetDef, force: boolean): Promise<void> {
   console.log(`  >> Generating ${asset.dir}/${asset.filename}.png ...`);
 
   try {
+    // Build content parts — text prompt + optional reference image
+    const parts: Array<{ text: string } | { inlineData: { mimeType: string; data: string } }> = [];
+
+    if (asset.referenceImage) {
+      const refPath = path.join(PUBLIC, asset.referenceImage);
+      if (existsSync(refPath)) {
+        const { readFile } = await import("fs/promises");
+        const refData = await readFile(refPath);
+        parts.push({
+          inlineData: {
+            mimeType: "image/png",
+            data: refData.toString("base64"),
+          },
+        });
+        console.log(`  .. Using reference: ${asset.referenceImage}`);
+      }
+    }
+
+    parts.push({ text: asset.prompt });
+
     const response = await ai.models.generateContentStream({
       model: MODEL,
       config: {
@@ -495,7 +619,7 @@ async function generateAsset(asset: AssetDef, force: boolean): Promise<void> {
       contents: [
         {
           role: "user",
-          parts: [{ text: asset.prompt }],
+          parts,
         },
       ],
     });
@@ -504,7 +628,32 @@ async function generateAsset(asset: AssetDef, force: boolean): Promise<void> {
       if (!chunk.candidates?.[0]?.content?.parts) continue;
       const part = chunk.candidates[0].content.parts[0];
       if (part?.inlineData) {
-        const buffer = Buffer.from(part.inlineData.data || "", "base64");
+        let buffer: Buffer = Buffer.from(part.inlineData.data || "", "base64");
+
+        // Post-process: downscale tiles to 64x64 for true pixel-art look
+        if (asset.dir === "tiles") {
+          console.log(`  .. Downscaling ${asset.filename} to 64x64...`);
+          buffer = await sharp(buffer)
+            .resize(64, 64, { kernel: sharp.kernel.nearest })
+            .png()
+            .toBuffer();
+        }
+
+        // Post-process sprites and icons to remove AI-generated fake backgrounds
+        if (asset.dir === "sprites" || asset.dir === "icons") {
+          console.log(`  .. Removing background for ${asset.filename}...`);
+          buffer = await removeBackground(buffer);
+        }
+
+        // Downscale icons to 32x32
+        if (asset.dir === "icons") {
+          console.log(`  .. Downscaling ${asset.filename} to 32x32...`);
+          buffer = await sharp(buffer)
+            .resize(32, 32, { kernel: sharp.kernel.nearest })
+            .png()
+            .toBuffer();
+        }
+
         await writeFile(outPath, buffer);
         console.log(
           `  OK ${asset.dir}/${asset.filename}.png (${(buffer.length / 1024).toFixed(1)}KB)`,
@@ -541,18 +690,83 @@ async function generateCategory(name: string, assets: AssetDef[], force: boolean
   console.log(`\n=== ${name} done ===\n`);
 }
 
+/** Post-process existing sprite/icon PNGs to remove backgrounds without re-generating. */
+async function fixBackgrounds(): Promise<void> {
+  console.log("\n=== Fixing backgrounds on existing sprites and icons ===\n");
+  const dirs = ["sprites", "icons"];
+  for (const dir of dirs) {
+    const dirPath = path.join(PUBLIC, dir);
+    if (!existsSync(dirPath)) continue;
+    const { readdir, readFile } = await import("fs/promises");
+    const files = await readdir(dirPath);
+    for (const file of files) {
+      if (!file.endsWith(".png")) continue;
+      const filePath = path.join(dirPath, file);
+      console.log(`  >> ${dir}/${file}...`);
+      const input = await readFile(filePath);
+      const output = await removeBackground(input);
+      await writeFile(filePath, output);
+      console.log(`  OK ${dir}/${file} (${(output.length / 1024).toFixed(1)}KB)`);
+    }
+  }
+  console.log("\n=== Background fix done ===\n");
+}
+
 async function main(): Promise<void> {
+  const args = process.argv.slice(2);
+  const force = args.includes("--force");
+  const fixBg = args.includes("--fix-bg");
+  const category = args.find((a) => !a.startsWith("--")) || "all";
+
+  const fixSize = args.includes("--fix-size");
+
+  // --fix-bg mode: just post-process existing files, no API key needed
+  if (fixBg) {
+    await fixBackgrounds();
+    return;
+  }
+
+  // --fix-size mode: downscale existing tiles to 64x64, icons to 32x32
+  if (fixSize) {
+    console.log("\n=== Downscaling existing assets ===\n");
+    const { readdir, readFile } = await import("fs/promises");
+    const resizeDir = async (dir: string, size: number) => {
+      const dirPath = path.join(PUBLIC, dir);
+      if (!existsSync(dirPath)) return;
+      const files = await readdir(dirPath);
+      for (const file of files) {
+        if (!file.endsWith(".png")) continue;
+        const filePath = path.join(dirPath, file);
+        const input = await readFile(filePath);
+        const meta = await sharp(input).metadata();
+        if (meta.width === size && meta.height === size) {
+          console.log(`  -- ${dir}/${file} already ${size}x${size}`);
+          continue;
+        }
+        const output = await sharp(input)
+          .resize(size, size, { kernel: sharp.kernel.nearest })
+          .png()
+          .toBuffer();
+        await writeFile(filePath, output);
+        console.log(
+          `  OK ${dir}/${file} → ${size}x${size} (${(output.length / 1024).toFixed(1)}KB)`,
+        );
+      }
+    };
+    await resizeDir("tiles", 64);
+    await resizeDir("icons", 32);
+    console.log("\n=== Downscale done ===\n");
+    return;
+  }
+
   if (!process.env["GEMINI_API_KEY"]) {
     console.error("Error: GEMINI_API_KEY environment variable is required");
     console.error(
       "Usage: GEMINI_API_KEY=your-key npx tsx scripts/generate-assets.ts [category] [--force]",
     );
+    console.error("       npx tsx scripts/generate-assets.ts --fix-bg  (remove backgrounds only)");
     process.exit(1);
   }
-
-  const args = process.argv.slice(2);
-  const force = args.includes("--force");
-  const category = args.find((a) => a !== "--force") || "all";
 
   console.log("Realm of Idlers - Asset Generator");
   console.log(`  Style:    Ultima Online 16-bit pixel art`);
