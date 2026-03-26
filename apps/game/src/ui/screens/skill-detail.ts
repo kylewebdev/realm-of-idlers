@@ -1,9 +1,32 @@
-import type { SkillType } from "@realm-of-idlers/shared";
-import { xpForLevel, xpToNextLevel } from "@realm-of-idlers/shared";
+import type { SkillType, TileCoord } from "@realm-of-idlers/shared";
+import { MAP_SIZE, xpForLevel, xpToNextLevel } from "@realm-of-idlers/shared";
 import { gameStore } from "@realm-of-idlers/state";
 import { getAvailableActivities } from "@realm-of-idlers/skills";
 import type { GatherActivityDef, CraftActivityDef } from "@realm-of-idlers/engine";
 import { uiStore } from "../store.js";
+
+/** Find the nearest resource node on the map matching an activity ID. */
+function findNearestNode(
+  tiles: any[][],
+  activityId: string,
+  playerPos: TileCoord,
+): { nodeId: string; tile: TileCoord } | null {
+  let best: { nodeId: string; tile: TileCoord; dist: number } | null = null;
+
+  for (let row = 0; row < MAP_SIZE; row++) {
+    for (let col = 0; col < MAP_SIZE; col++) {
+      const t = tiles[row]?.[col];
+      if (t?.resourceNode?.activityId === activityId) {
+        const dist = Math.abs(col - playerPos.col) + Math.abs(row - playerPos.row);
+        if (!best || dist < best.dist) {
+          best = { nodeId: t.resourceNode.nodeId, tile: { col, row }, dist };
+        }
+      }
+    }
+  }
+
+  return best ? { nodeId: best.nodeId, tile: best.tile } : null;
+}
 
 export function renderSkillDetail(container: HTMLElement, skill: SkillType): void {
   const state = gameStore.getState();
@@ -47,7 +70,7 @@ export function renderSkillDetail(container: HTMLElement, skill: SkillType): voi
     uiStore.getState().closeModal();
   });
 
-  // Wire start buttons
+  // Wire start buttons — find nearest node and walk to it
   container.querySelectorAll("[data-start-activity]").forEach((btn) => {
     btn.addEventListener("click", () => {
       const activityId = (btn as HTMLElement).dataset.startActivity!;
@@ -55,23 +78,41 @@ export function renderSkillDetail(container: HTMLElement, skill: SkillType): voi
       if (!activity) return;
 
       if ("inputs" in activity) {
-        // Craft action
+        // Craft actions don't need a world location — start immediately
+        // (crafting happens at structures like forge/cooking-range)
         gameStore.getState().setAction({
           type: "craft",
           activityId: activity.id,
           ticksRemaining: activity.baseTickDuration,
         });
+        uiStore.getState().closeModal();
+        uiStore.getState().pushEvent(`Started ${activity.id}`);
       } else {
-        // Gather action
-        gameStore.getState().setAction({
-          type: "gather",
-          activityId: activity.id,
-          nodeId: `node-${activity.id}`,
-          ticksRemaining: activity.baseTickDuration,
-        });
+        // Gather action — find nearest resource node on the map
+        const walkTo = (window as any).__walkToActivity as
+          | ((
+              activityId: string,
+              nodeId: string,
+              target: { col: number; row: number },
+              ticks: number,
+            ) => void)
+          | undefined;
+        const mapData = (window as any).__briarwoodMap as { tiles: any[][] } | undefined;
+
+        if (walkTo && mapData) {
+          const nearest = findNearestNode(
+            mapData.tiles,
+            activityId,
+            gameStore.getState().player.position,
+          );
+          if (nearest) {
+            walkTo(activityId, nearest.nodeId, nearest.tile, activity.baseTickDuration);
+            uiStore.getState().closeModal();
+          } else {
+            uiStore.getState().pushEvent("No accessible resource node found for this activity.");
+          }
+        }
       }
-      uiStore.getState().closeModal();
-      uiStore.getState().pushEvent(`Started ${activity.id}`);
     });
   });
 }

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { tileToWorld } from "@realm-of-idlers/shared";
 
-const CAMERA_OFFSET = new THREE.Vector3(30, 40, 30);
+const CAMERA_OFFSET = new THREE.Vector3(20, 25, 20);
 const LERP_FACTOR = 0.08;
 
 /**

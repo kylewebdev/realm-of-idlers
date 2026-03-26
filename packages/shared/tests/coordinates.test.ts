@@ -21,24 +21,26 @@ describe("coordinate round-trips", () => {
   it("round-trips work with elevation", () => {
     for (const elevation of [0, 1, 2, 3]) {
       const world = tileToWorld(10, 20, elevation);
-      const tile = worldToTile(world, elevation);
+      const tile = worldToTile(world);
       expect(tile.col).toBe(10);
       expect(tile.row).toBe(20);
     }
   });
 
-  it("tileToWorld produces expected isometric offsets", () => {
+  it("tileToWorld uses X/Z for ground plane, Y for elevation", () => {
     const origin = tileToWorld(0, 0);
     expect(origin.x).toBe(0);
     expect(origin.y).toBe(0);
     expect(origin.z).toBe(0);
 
-    const right = tileToWorld(1, 0);
-    expect(right.x).toBe(32);
-    expect(right.y).toBe(16);
+    const tile = tileToWorld(5, 10);
+    expect(tile.x).toBe(5);
+    expect(tile.z).toBe(10);
+    expect(tile.y).toBe(0);
 
-    const down = tileToWorld(0, 1);
-    expect(down.x).toBe(-32);
-    expect(down.y).toBe(16);
+    const elevated = tileToWorld(5, 10, 2);
+    expect(elevated.x).toBe(5);
+    expect(elevated.z).toBe(10);
+    expect(elevated.y).toBe(1); // elevation * 0.5
   });
 });

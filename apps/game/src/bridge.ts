@@ -13,7 +13,7 @@ import type { TickResult, OfflineSummary, TickContext } from "@realm-of-idlers/e
 import { createTickContext } from "@realm-of-idlers/skills";
 import { createCombatProcessor, MONSTERS } from "@realm-of-idlers/combat";
 import { ITEMS } from "@realm-of-idlers/items";
-import { createBriarwoodMap } from "@realm-of-idlers/world";
+import { createBriarwoodMap, findPath } from "@realm-of-idlers/world";
 import { QUESTS } from "./quests/registry.js";
 import { checkQuestProgress, getAvailableQuests } from "./quests/checker.js";
 
@@ -221,9 +221,53 @@ export async function init(): Promise<void> {
   startAutoSave(() => gameStore.getState());
   registerExitSave(() => gameStore.getState());
 
-  // 14. Setup input
+  // 14. Setup input — location-based activities
   let movementPath: TileCoord[] = [];
   let movementIndex = 0;
+  let pendingActivity: {
+    activityId: string;
+    nodeId: string;
+    targetTile: TileCoord;
+    tickDuration: number;
+  } | null = null;
+
+  /** Set a pending activity and pathfind to the target tile. */
+  function walkToAndStartActivity(
+    activityId: string,
+    nodeId: string,
+    targetTile: TileCoord,
+    tickDuration: number,
+  ): void {
+    const from = gameStore.getState().player.position;
+    const path = findPath(map.tiles, from, targetTile);
+    if (path && path.length > 1) {
+      pendingActivity = { activityId, nodeId, targetTile, tickDuration };
+      movementPath = path;
+      movementIndex = 1;
+      gameStore.getState().setAction({ type: "idle" }); // stop current action while walking
+      pushNotification(`Walking to ${activityId}...`);
+    } else if (path && path.length === 1) {
+      // Already at the node
+      startActivityAtNode(activityId, nodeId, tickDuration);
+    } else {
+      pushNotification("Can't reach that location.");
+    }
+  }
+
+  /** Start an activity (player already at node). */
+  function startActivityAtNode(activityId: string, nodeId: string, tickDuration: number): void {
+    pushNotification(`Started: ${activityId}`);
+    gameStore.getState().setAction({
+      type: "gather",
+      activityId,
+      nodeId,
+      ticksRemaining: tickDuration,
+    });
+  }
+
+  // Expose walkToAndStartActivity for the skill-detail modal
+  (window as any).__walkToActivity = walkToAndStartActivity;
+  (window as any).__briarwoodMap = map;
 
   setupMouseInput(
     canvas,
@@ -231,18 +275,21 @@ export async function init(): Promise<void> {
     map.tiles,
     () => gameStore.getState().player.position,
     (path) => {
+      pendingActivity = null; // cancel pending if clicking elsewhere
       movementPath = path;
       movementIndex = 1;
     },
-    (tile, _coord) => {
+    (tile, coord) => {
       if (tile.resourceNode) {
-        pushNotification(`Starting: ${tile.resourceNode.activityId}`);
-        gameStore.getState().setAction({
-          type: "gather",
-          activityId: tile.resourceNode.activityId,
-          nodeId: tile.resourceNode.nodeId,
-          ticksRemaining: 7,
-        });
+        // Walk to the resource node, then start gathering
+        const def = ctx.activities.gather[tile.resourceNode.activityId];
+        walkToAndStartActivity(
+          tile.resourceNode.activityId,
+          tile.resourceNode.nodeId,
+          coord,
+          def?.baseTickDuration ?? 7,
+        );
+        return; // don't also pathfind via onMoveTo
       }
       if (tile.structure) {
         pushNotification(`Interacting with ${tile.structure}`);
@@ -300,6 +347,21 @@ export async function init(): Promise<void> {
       if (movementIndex >= movementPath.length) {
         movementPath = [];
         movementIndex = 0;
+
+        // Check if we arrived at a pending activity target
+        if (pendingActivity) {
+          const pos = gameStore.getState().player.position;
+          const dx = Math.abs(pos.col - pendingActivity.targetTile.col);
+          const dz = Math.abs(pos.row - pendingActivity.targetTile.row);
+          if (dx <= 1 && dz <= 1) {
+            startActivityAtNode(
+              pendingActivity.activityId,
+              pendingActivity.nodeId,
+              pendingActivity.tickDuration,
+            );
+          }
+          pendingActivity = null;
+        }
       }
     }
 
