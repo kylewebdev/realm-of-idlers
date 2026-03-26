@@ -278,7 +278,7 @@ tick() → resolve current action
 
 ---
 
-## Step 4: `packages/items` — Item Database & Inventory
+## Step 4: `packages/items` — Item Database & Inventory ✅
 
 **Goal:** Define all MVP items and implement inventory/equipment operations.
 
@@ -343,6 +343,26 @@ hasItem(inventory, itemId, qty)     → boolean
 - Equip/unequip swaps correctly between inventory and equipment
 - Shop buy deducts gold, shop sell adds gold
 - Bank deposit/withdraw round-trips
+
+### Implementation Notes
+
+**Key decisions:**
+
+- **Immutable inventory operations** — All functions in `packages/items` (`addItem`, `removeItem`, `equipItem`, etc.) are pure and return new state. This contrasts with the mutating helpers in `packages/engine/src/helpers.ts` which exist for tick-loop performance. The two sets serve different purposes and are intentionally separate.
+- **`addItem` takes an `ItemDef` parameter** — rather than looking up from the registry internally. This keeps functions pure and registry-independent, letting callers pass any item definition.
+- **Result types use discriminated unions** — `{ ok: true; inventory } | { ok: false; reason }` pattern for all operations. Avoids exceptions and makes error handling explicit.
+- **Non-stackable items always occupy one slot per unit** — Equipment and tools each take one inventory slot with `quantity: 1`. `addItem` with `qty: 3` for a non-stackable creates 3 separate slots.
+- **Bank always stacks** — All items stack in the bank regardless of their `stackable` flag, matching RuneScape convention.
+- **No diminishing returns on selling** — Kept simple for MVP. Bulk sell is `sellValue × qty`.
+- **~40 items in registry** — Resources (10), food (3), tools (5), equipment (12 = bronze+iron × 6 slots), misc drops (8 including bones, feathers, pelts, guardian's crest).
+- **`ShopDef` interface** — Defines shop stock with `basePrice` per item. Shop instances should be created by the quest/world step.
+
+**Impact on future steps:**
+
+- **Step 5 (skills):** Activity outputs reference item IDs from this registry (e.g. `"normal-log"`, `"bronze-bar"`). Activity definitions should use the same string IDs.
+- **Step 6 (combat):** Monster loot tables reference item IDs from this registry. `getItem(id)` can be used to look up `healAmount` for auto-eat, `equipStats` for damage calculations.
+- **Step 8 (app bridge):** UI should call `addItem`/`removeItem`/`equipItem` etc. from this package and write results to the Zustand store. Consider adding store actions that wrap these pure functions.
+- **Step 9 (UI):** Item icons reference `ItemDef.icon` — these need matching sprite assets in `apps/game/public/assets/items/`.
 
 ---
 
