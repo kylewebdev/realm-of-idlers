@@ -15,9 +15,10 @@ export class TileRendererManager {
     this.chunkRenderer = new ChunkRenderer(sceneCtx.scene, tiles);
   }
 
-  /** Update visible chunks if player has moved to a new tile. */
+  /** Update visible chunks if player has moved or textures need rebuilding. */
   update(playerCol: number, playerRow: number): void {
-    if (playerCol === this.lastCol && playerRow === this.lastRow) return;
+    const moved = playerCol !== this.lastCol || playerRow !== this.lastRow;
+    if (!moved && !this.chunkRenderer.needsRebuild) return;
     this.lastCol = playerCol;
     this.lastRow = playerRow;
     this.chunkRenderer.updateVisibleChunks(playerCol, playerRow);

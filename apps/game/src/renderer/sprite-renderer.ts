@@ -26,8 +26,9 @@ function makeSpriteMaterial(
     return new THREE.MeshBasicMaterial({
       map: loadSprite(textureName),
       transparent: true,
-      alphaTest: 0.1,
+      alphaTest: 0.5,
       side: THREE.DoubleSide,
+      depthWrite: false,
     });
   }
   return new THREE.MeshBasicMaterial({ color: fallbackColor });

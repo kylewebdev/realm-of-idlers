@@ -121,6 +121,11 @@ export class ChunkRenderer {
     // TODO: animate water UVs or tint if desired.
   }
 
+  /** True when textures finished loading and chunks need rebuilding. */
+  get needsRebuild(): boolean {
+    return this.pendingRebuild;
+  }
+
   /** Update which chunks are rendered based on player position. */
   updateVisibleChunks(centerCol: number, centerRow: number): void {
     // If textures just finished loading, rebuild all chunks
