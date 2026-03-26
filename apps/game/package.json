@@ -1,0 +1,27 @@
+{
+  "name": "@realm-of-idlers/game",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "build": "tsc && vp build",
+    "preview": "vp preview"
+  },
+  "dependencies": {
+    "@realm-of-idlers/combat": "workspace:*",
+    "@realm-of-idlers/engine": "workspace:*",
+    "@realm-of-idlers/items": "workspace:*",
+    "@realm-of-idlers/shared": "workspace:*",
+    "@realm-of-idlers/skills": "workspace:*",
+    "@realm-of-idlers/state": "workspace:*",
+    "@realm-of-idlers/world": "workspace:*",
+    "three": "catalog:"
+  },
+  "devDependencies": {
+    "@types/three": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}
