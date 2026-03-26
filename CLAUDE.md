@@ -1,3 +1,23 @@
+# Realm of Idlers
+
+## Monorepo
+
+`vp run dev` (or `vp run @realm-of-idlers/game#dev`) starts the game. `vp run test -r` and `vp run build -r` run recursively across all packages.
+
+## Architecture
+
+Processor-based tick system, not ECS. Each 600ms tick dispatches the current action to a processor (`engine/src/processors/`), which returns a `TickResult` (XP, items, next action). `bridge.ts` wires state, renderers, input, and the game loop together.
+
+State uses **Zustand + Immer middleware** — mutate via store action methods and Immer draft patterns, never spread/clone manually. `enableMapSet()` is required (state includes `Set<string>`).
+
+Render loop (RAF) is separate from the tick loop. Offline catch-up runs missed ticks on tab refocus using `timestamps.lastTick`.
+
+## Gotchas
+
+- Quest system lives in `apps/game` (not a package) — check `quests/registry` and `quests/checker`.
+- Three.js scene changes must sync with renderer managers (`TileRenderer`, `SpriteRenderer`, etc.).
+- Forgetting to update `timestamps.lastTick` breaks offline catch-up.
+
 <!--VITE PLUS START-->
 
 # Using Vite+, the Unified Toolchain for the Web
