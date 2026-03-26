@@ -1,23 +1,23 @@
 import type { TileCoord } from "@realm-of-idlers/shared";
-import type { TileMap } from "./types.js";
-import { isWalkable, getTile } from "./briarwood.js";
+import type { MapIndex } from "./types.js";
+import { isWalkable, getGround, isWallBlocked } from "./map-loader.js";
 
 const DEFAULT_MAX_LENGTH = 50;
 
 /**
- * A* pathfinding over a tile map.
+ * A* pathfinding over a GameMap using MapIndex.
  *
  * Returns an array of tile coords from `from` to `to` (inclusive),
  * or null if no path exists or exceeds maxLength.
  */
 export function findPath(
-  tiles: TileMap,
+  index: MapIndex,
   from: TileCoord,
   to: TileCoord,
   maxLength: number = DEFAULT_MAX_LENGTH,
 ): TileCoord[] | null {
-  if (!isWalkable(tiles, from.col, from.row)) return null;
-  if (!isWalkable(tiles, to.col, to.row)) return null;
+  if (!isWalkable(index, from.col, from.row)) return null;
+  if (!isWalkable(index, to.col, to.row)) return null;
   if (from.col === to.col && from.row === to.row) return [from];
 
   const openSet = new Map<string, Node>();
@@ -56,8 +56,8 @@ export function findPath(
     closedSet.add(currentKey);
 
     // Explore 4 neighbors
-    const currentTile = getTile(tiles, current.col, current.row);
-    const currentElev = currentTile?.elevation ?? 0;
+    const currentGround = getGround(index.map, current.col, current.row);
+    const currentElev = currentGround?.elevation ?? 0;
 
     for (const [dc, dr] of DIRECTIONS) {
       const nc = current.col + dc;
@@ -65,11 +65,14 @@ export function findPath(
       const nKey = key(nc, nr);
 
       if (closedSet.has(nKey)) continue;
-      if (!isWalkable(tiles, nc, nr)) continue;
+      if (!isWalkable(index, nc, nr)) continue;
+
+      // Check edge walls blocking this movement
+      if (isWallBlocked(index, current.col, current.row, dc, dr)) continue;
 
       // Only allow stepping up/down by 1 elevation at a time
-      const neighborTile = getTile(tiles, nc, nr);
-      const neighborElev = neighborTile?.elevation ?? 0;
+      const neighborGround = getGround(index.map, nc, nr);
+      const neighborElev = neighborGround?.elevation ?? 0;
       if (Math.abs(neighborElev - currentElev) > 1) continue;
 
       const g = current.g + 1;
@@ -89,27 +92,24 @@ export function findPath(
 /**
  * Find a path to the nearest walkable tile adjacent to a non-walkable target.
  * Used for interacting with entities (trees, ores, structures) that block movement.
- * Returns the path to the best adjacent tile, or null if none reachable.
  */
 export function findPathToAdjacent(
-  tiles: TileMap,
+  index: MapIndex,
   from: TileCoord,
   target: TileCoord,
   maxLength: number = DEFAULT_MAX_LENGTH,
 ): TileCoord[] | null {
-  // If the target itself is walkable, just path directly
-  if (isWalkable(tiles, target.col, target.row)) {
-    return findPath(tiles, from, target, maxLength);
+  if (isWalkable(index, target.col, target.row)) {
+    return findPath(index, from, target, maxLength);
   }
 
-  // Try all 4 neighbors of the target, pick the one with the shortest path
   let bestPath: TileCoord[] | null = null;
   for (const [dc, dr] of DIRECTIONS) {
     const nc = target.col + dc;
     const nr = target.row + dr;
-    if (!isWalkable(tiles, nc, nr)) continue;
+    if (!isWalkable(index, nc, nr)) continue;
 
-    const path = findPath(tiles, from, { col: nc, row: nr }, maxLength);
+    const path = findPath(index, from, { col: nc, row: nr }, maxLength);
     if (path && (!bestPath || path.length < bestPath.length)) {
       bestPath = path;
     }

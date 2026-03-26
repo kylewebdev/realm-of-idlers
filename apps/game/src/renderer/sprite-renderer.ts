@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { tileToWorld } from "@realm-of-idlers/shared";
-import type { SpawnZone, TileMap } from "@realm-of-idlers/world";
-import { getTile } from "@realm-of-idlers/world";
+import type { GameMap, MapSpawnZone } from "@realm-of-idlers/world";
+import { getGround, getObjectType } from "@realm-of-idlers/world";
 
 /** Half-height of the player sprite. */
 const PLAYER_HALF_HEIGHT = 0.6;
@@ -34,39 +34,14 @@ function makeSpriteMaterial(
   return new THREE.MeshBasicMaterial({ color: fallbackColor });
 }
 
-/** Sprite size and texture mapping for resource nodes by activity prefix. */
-const RESOURCE_STYLES: Record<
-  string,
-  { color: number; width: number; height: number; sprite: string | null }
-> = {
-  "chop-normal-tree": { color: 0x2d8a4e, width: 1.0, height: 1.4, sprite: "normal-tree" },
-  "chop-oak-tree": { color: 0x1b5e30, width: 1.2, height: 1.6, sprite: "oak-tree" },
-  "mine-copper": { color: 0xc87533, width: 0.7, height: 0.7, sprite: "copper-rock" },
-  "mine-tin": { color: 0xb0b0b0, width: 0.7, height: 0.7, sprite: "tin-rock" },
-  "mine-iron": { color: 0x6b3a2a, width: 0.7, height: 0.7, sprite: "iron-rock" },
-  "fish-shrimp": { color: 0x5599cc, width: 0.6, height: 0.5, sprite: "fishing-spot-shrimp" },
-  "fish-trout": { color: 0x3377aa, width: 0.7, height: 0.6, sprite: "fishing-spot-trout" },
-};
-
-/** Structure sprite mapping. */
-const STRUCTURE_STYLES: Record<
-  string,
-  { color: number; width: number; height: number; sprite: string | null }
-> = {
-  shop: { color: 0xcccc33, width: 1.0, height: 1.2, sprite: "shop" },
-  bank: { color: 0xdaa520, width: 1.0, height: 1.2, sprite: "bank" },
-  forge: { color: 0xff6633, width: 1.0, height: 1.2, sprite: "forge" },
-  "cooking-range": { color: 0xcc6644, width: 1.0, height: 1.2, sprite: "cooking-range" },
-};
-
 /**
- * Renders player, monster, NPC, and resource node sprites as colored box placeholders.
+ * Renders player, monster, and map object sprites as billboard planes.
  */
 export class SpriteRenderer {
   private playerMesh: THREE.Mesh;
   private scene: THREE.Scene;
   private camera: THREE.Camera | null = null;
-  private tiles: TileMap;
+  private gameMap: GameMap;
   private monsterMeshes: THREE.Mesh[] = [];
   private entityMeshes: THREE.Mesh[] = [];
 
@@ -81,9 +56,9 @@ export class SpriteRenderer {
   /** 0..1 interpolation progress between prev and target. */
   private moveProgress = 1;
 
-  constructor(scene: THREE.Scene, tiles: TileMap) {
+  constructor(scene: THREE.Scene, gameMap: GameMap) {
     this.scene = scene;
-    this.tiles = tiles;
+    this.gameMap = gameMap;
     // Player: billboard sprite
     const playerGeo = new THREE.PlaneGeometry(0.8, 1.2);
     const playerMat = makeSpriteMaterial("player", 0x3366cc);
@@ -102,13 +77,12 @@ export class SpriteRenderer {
 
   /** Set the next target tile. Uses sprite's current visual position as start. */
   setPlayerPosition(col: number, row: number): void {
-    // Start from where the sprite actually is right now — no visual jump
     this.prevX = this.playerMesh.position.x;
     this.prevY = this.playerMesh.position.y;
     this.prevZ = this.playerMesh.position.z;
 
-    const tile = getTile(this.tiles, col, row);
-    const elevation = tile?.elevation ?? 0;
+    const ground = getGround(this.gameMap, col, row);
+    const elevation = ground?.elevation ?? 0;
     const pos = tileToWorld(col, row, elevation);
     this.targetX = pos.x;
     this.targetY = pos.y + PLAYER_HALF_HEIGHT;
@@ -155,16 +129,14 @@ export class SpriteRenderer {
   /** Rotate a plane mesh to face the camera (Y-axis billboard). */
   private billboardToCamera(mesh: THREE.Mesh): void {
     if (!this.camera) return;
-    // Only rotate on Y axis so sprites stay upright
     const camPos = this.camera.position;
     const dx = camPos.x - mesh.position.x;
     const dz = camPos.z - mesh.position.z;
     mesh.rotation.y = Math.atan2(dx, dz);
   }
 
-  /** Place monster sprites at spawn zone centers. */
-  updateSpawnZones(zones: SpawnZone[]): void {
-    // Clear existing
+  /** Place monster sprites at spawn zone rect centers. */
+  updateSpawnZones(zones: MapSpawnZone[]): void {
     for (const mesh of this.monsterMeshes) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
@@ -172,14 +144,13 @@ export class SpriteRenderer {
     this.monsterMeshes = [];
 
     const monsterGeo = new THREE.BoxGeometry(0.5, 0.8, 0.5);
-    const monsterMat = new THREE.MeshLambertMaterial({ color: 0xcc3333 });
+    const monsterMat = new THREE.MeshBasicMaterial({ color: 0xcc3333 });
 
     for (const zone of zones) {
-      if (zone.tiles.length === 0) continue;
-      // Place at center of zone
-      const centerTile = zone.tiles[Math.floor(zone.tiles.length / 2)]!;
-      const tile = getTile(this.tiles, centerTile.col, centerTile.row);
-      const pos = tileToWorld(centerTile.col, centerTile.row, tile?.elevation ?? 0);
+      const centerCol = Math.floor((zone.rect.colStart + zone.rect.colEnd) / 2);
+      const centerRow = Math.floor((zone.rect.rowStart + zone.rect.rowEnd) / 2);
+      const ground = getGround(this.gameMap, centerCol, centerRow);
+      const pos = tileToWorld(centerCol, centerRow, ground?.elevation ?? 0);
       const mesh = new THREE.Mesh(monsterGeo, monsterMat);
       mesh.position.set(pos.x, pos.y + 0.4, pos.z);
       this.scene.add(mesh);
@@ -187,55 +158,36 @@ export class SpriteRenderer {
     }
   }
 
-  /** Place entity sprites for structures and resource nodes. */
-  updateEntities(tiles: TileMap): void {
+  /** Place entity sprites from the map's object list using the object registry. */
+  updateEntities(): void {
     for (const mesh of this.entityMeshes) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
     }
     this.entityMeshes = [];
 
-    for (let row = 0; row < tiles.length; row++) {
-      for (let col = 0; col < tiles[row]!.length; col++) {
-        const tile = getTile(tiles, col, row);
-        if (!tile) continue;
+    for (const obj of this.gameMap.objects) {
+      const typeDef = getObjectType(obj.typeId);
+      const w = typeDef?.width ?? 0.6;
+      const h = typeDef?.height ?? 0.6;
+      const color = typeDef?.fallbackColor ?? 0xaaaaaa;
+      const sprite = typeDef?.sprite ?? null;
 
-        if (tile.structure) {
-          const style = STRUCTURE_STYLES[tile.structure];
-          const w = style?.width ?? 1.0;
-          const h = style?.height ?? 1.2;
-          const color = style?.color ?? 0xcccc33;
-          const sprite = style?.sprite ?? null;
-          const geo = new THREE.PlaneGeometry(w, h);
-          const mat = makeSpriteMaterial(sprite, color);
-          const mesh = new THREE.Mesh(geo, mat);
-          const pos = tileToWorld(col, row, tile.elevation);
-          mesh.position.set(pos.x, pos.y + h / 2, pos.z);
-          mesh.userData = { tileCol: col, tileRow: row };
-          this.scene.add(mesh);
-          this.entityMeshes.push(mesh);
-        }
+      const geo = new THREE.PlaneGeometry(w, h);
+      const mat = makeSpriteMaterial(sprite, color);
+      const mesh = new THREE.Mesh(geo, mat);
 
-        if (tile.resourceNode) {
-          const style = RESOURCE_STYLES[tile.resourceNode.activityId];
-          const w = style?.width ?? 0.6;
-          const h = style?.height ?? 0.6;
-          const color = style?.color ?? 0xaaaaaa;
-          const sprite = style?.sprite ?? null;
-          const geo = new THREE.PlaneGeometry(w, h);
-          const mat = makeSpriteMaterial(sprite, color);
-          const mesh = new THREE.Mesh(geo, mat);
-          const pos = tileToWorld(col, row, tile.elevation);
-          mesh.position.set(pos.x, pos.y + h / 2, pos.z);
-          mesh.userData = { tileCol: col, tileRow: row };
-          this.scene.add(mesh);
-          this.entityMeshes.push(mesh);
-        }
-      }
+      const ground = getGround(this.gameMap, obj.col, obj.row);
+      const pos = tileToWorld(obj.col, obj.row, ground?.elevation ?? 0);
+      mesh.position.set(pos.x, pos.y + h / 2, pos.z);
+      mesh.userData = { tileCol: obj.col, tileRow: obj.row };
+
+      this.scene.add(mesh);
+      this.entityMeshes.push(mesh);
     }
   }
 
-  /** Get all interactive entity meshes for raycasting. Each has userData.tileCol/tileRow. */
+  /** Get all interactive entity meshes for raycasting. */
   getEntityMeshes(): THREE.Mesh[] {
     return this.entityMeshes;
   }

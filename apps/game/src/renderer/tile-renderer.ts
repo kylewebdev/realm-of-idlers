@@ -1,4 +1,4 @@
-import type { TileMap } from "@realm-of-idlers/world";
+import type { GameMap } from "@realm-of-idlers/world";
 import { ChunkRenderer } from "@realm-of-idlers/world";
 import type { SceneContext } from "./scene.js";
 
@@ -11,8 +11,8 @@ export class TileRendererManager {
   private lastCol = -1;
   private lastRow = -1;
 
-  constructor(sceneCtx: SceneContext, tiles: TileMap) {
-    this.chunkRenderer = new ChunkRenderer(sceneCtx.scene, tiles);
+  constructor(sceneCtx: SceneContext, gameMap: GameMap) {
+    this.chunkRenderer = new ChunkRenderer(sceneCtx.scene, gameMap);
   }
 
   /** Update visible chunks if player has moved or textures need rebuilding. */

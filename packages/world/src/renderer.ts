@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { tileToWorld } from "@realm-of-idlers/shared";
-import type { TileMap } from "./types.js";
+import type { GameMap } from "./types.js";
 import { getChunkTiles, getVisibleChunks } from "./chunks.js";
-import { getTile } from "./briarwood.js";
+import { getGround } from "./map-loader.js";
 
 /** Fallback colors if textures aren't loaded yet. */
 const TERRAIN_COLORS: Record<string, number> = {
@@ -50,7 +50,7 @@ export class ChunkRenderer {
 
   constructor(
     private scene: THREE.Scene,
-    private tiles: TileMap,
+    private gameMap: GameMap,
   ) {
     const loader = new THREE.TextureLoader();
     let pending = 0;
@@ -243,37 +243,36 @@ export class ChunkRenderer {
 
     for (let row = startRow; row <= endRow; row++) {
       for (let col = startCol; col <= endCol; col++) {
-        const tile = getTile(this.tiles, col, row);
-        if (!tile) continue;
+        const cell = getGround(this.gameMap, col, row);
+        if (!cell) continue;
 
         const geometry = new THREE.PlaneGeometry(1, 1);
-        const material = this.makeTerrainMat(tile.terrain);
+        const material = this.makeTerrainMat(cell.terrain);
         const mesh = new THREE.Mesh(geometry, material);
 
-        const pos = tileToWorld(col, row, tile.elevation);
+        const pos = tileToWorld(col, row, cell.elevation);
         mesh.position.set(pos.x, pos.y, pos.z);
         mesh.rotation.x = -Math.PI / 2; // lay flat
 
         group.add(mesh);
 
         // Add vertical cliff faces where this tile is higher than a neighbor.
-        // PlaneGeometry faces +Z by default, so we rotate on Y to point outward.
         const neighbors: [number, number, number][] = [
-          [col, row + 1, 0], // south neighbor → plane faces +Z (default)
-          [col, row - 1, Math.PI], // north neighbor → face -Z
-          [col + 1, row, Math.PI / 2], // east neighbor  → face +X
-          [col - 1, row, -Math.PI / 2], // west neighbor  → face -X
+          [col, row + 1, 0],
+          [col, row - 1, Math.PI],
+          [col + 1, row, Math.PI / 2],
+          [col - 1, row, -Math.PI / 2],
         ];
 
         for (const [nc, nr, rotY] of neighbors) {
-          const neighbor = getTile(this.tiles, nc, nr);
+          const neighbor = getGround(this.gameMap, nc, nr);
           const neighborElev = neighbor?.elevation ?? 0;
-          const elevDiff = tile.elevation - neighborElev;
+          const elevDiff = cell.elevation - neighborElev;
           if (elevDiff <= 0) continue;
 
           const wallHeight = elevDiff * 0.5;
           const wallGeo = new THREE.PlaneGeometry(1, wallHeight);
-          const wallMat = this.makeCliffMat(tile.terrain);
+          const wallMat = this.makeCliffMat(cell.terrain);
           const wallMesh = new THREE.Mesh(wallGeo, wallMat);
 
           // Position at the edge of this tile, halfway down the cliff

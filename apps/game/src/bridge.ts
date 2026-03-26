@@ -13,7 +13,8 @@ import type { TickResult, OfflineSummary, TickContext } from "@realm-of-idlers/e
 import { createTickContext } from "@realm-of-idlers/skills";
 import { createCombatProcessor, MONSTERS } from "@realm-of-idlers/combat";
 import { ITEMS } from "@realm-of-idlers/items";
-import { createBriarwoodMap, findPathToAdjacent } from "@realm-of-idlers/world";
+import { loadMap, indexMap, findPathToAdjacent } from "@realm-of-idlers/world";
+import type { MapObject } from "@realm-of-idlers/world";
 import { QUESTS } from "./quests/registry.js";
 import { checkQuestProgress, getAvailableQuests } from "./quests/checker.js";
 
@@ -31,7 +32,7 @@ import { initUI, pushNotification, showWelcomeBack } from "./ui/render.js";
 import { uiStore } from "./ui/store.js";
 
 /**
- * Initialize the game: load state, create renderers, wire engine, start loops.
+ * Initialize the game: load state, load map, create renderers, wire engine, start loops.
  */
 export async function init(): Promise<void> {
   // 1. Load or create game state
@@ -40,8 +41,12 @@ export async function init(): Promise<void> {
   gameStore.getState().loadState(state);
   console.log("[bridge] State loaded:", savedState ? "from save" : "new game");
 
-  // 2. Create the Briarwood map
-  const map = createBriarwoodMap();
+  // 2. Load the map from JSON
+  const gameMap = await loadMap("/maps/briarwood.json");
+  const mapIndex = indexMap(gameMap);
+  console.log(
+    `[bridge] Map loaded: ${gameMap.meta.name} (${gameMap.meta.width}x${gameMap.meta.height})`,
+  );
 
   // 3. Setup Three.js scene
   const canvas = document.getElementById("game-canvas") as HTMLCanvasElement;
@@ -49,17 +54,17 @@ export async function init(): Promise<void> {
   const sceneCtx = createScene(canvas);
 
   // 4. Create renderers
-  const tileRenderer = new TileRendererManager(sceneCtx, map.tiles);
-  const spriteRenderer = new SpriteRenderer(sceneCtx.scene, map.tiles);
+  const tileRenderer = new TileRendererManager(sceneCtx, gameMap);
+  const spriteRenderer = new SpriteRenderer(sceneCtx.scene, gameMap);
   spriteRenderer.setCamera(sceneCtx.camera);
-  spriteRenderer.updateSpawnZones(map.spawnZones);
-  spriteRenderer.updateEntities(map.tiles);
+  spriteRenderer.updateSpawnZones(gameMap.spawnZones);
+  spriteRenderer.updateEntities();
 
   // 5. Create minimap
   const minimapContainer = document.getElementById("minimap");
   let minimap: Minimap | null = null;
   if (minimapContainer) {
-    minimap = new Minimap(minimapContainer, map.tiles);
+    minimap = new Minimap(minimapContainer, gameMap);
   }
 
   // 6. Create polish systems
@@ -107,19 +112,16 @@ export async function init(): Promise<void> {
     const store = gameStore.getState();
     const pos = store.player.position;
 
-    // Update renderers
     tileRenderer.update(pos.col, pos.row);
     spriteRenderer.setPlayerPosition(pos.col, pos.row);
     minimap?.updatePlayerPosition(pos.col, pos.row);
     minimap?.updateExploredTiles(store.world.exploredTiles);
     smoothCamera.setTarget(pos.col, pos.row);
 
-    // Push notifications to UI event log
     for (const n of notifications) {
       pushNotification(n.message);
     }
 
-    // Spawn particles for gather completions
     if (result.itemsGained.length > 0) {
       const action = store.actionQueue[0];
       if (action?.type === "gather") {
@@ -129,14 +131,12 @@ export async function init(): Promise<void> {
       }
     }
 
-    // Spawn level-up particles
     for (const n of notifications) {
       if (n.type === "level_up") {
         particles.spawnLevelUpParticle(pos.col, pos.row);
       }
     }
 
-    // Spawn damage numbers for combat events
     for (const evt of result.combatEvents) {
       if (evt.type === "hit" && evt.damage) {
         const color = evt.source === "player" ? "#ffffff" : "#ff4444";
@@ -148,7 +148,6 @@ export async function init(): Promise<void> {
       }
     }
 
-    // Track monster kills for quest objectives
     for (const evt of result.combatEvents) {
       if (evt.type === "death" && evt.source === "monster") {
         const action = store.actionQueue[0];
@@ -158,7 +157,6 @@ export async function init(): Promise<void> {
       }
     }
 
-    // Track craft completions for quest objectives
     for (const item of result.itemsGained) {
       const currentState = gameStore.getState();
       for (const [questId, quest] of Object.entries(QUESTS)) {
@@ -174,18 +172,14 @@ export async function init(): Promise<void> {
       }
     }
 
-    // Check quest progress
     const questUpdates = checkQuestProgress(gameStore.getState(), QUESTS);
     for (const update of questUpdates) {
       if (update.completed) {
         const quest = QUESTS[update.questId];
-        if (quest) {
-          pushNotification(`Quest ready to claim: ${quest.name}`);
-        }
+        if (quest) pushNotification(`Quest ready to claim: ${quest.name}`);
       }
     }
 
-    // Auto-unlock available quests
     const available = getAvailableQuests(gameStore.getState(), QUESTS);
     for (const quest of available) {
       gameStore.getState().setQuestStatus(quest.id, "available");
@@ -226,13 +220,11 @@ export async function init(): Promise<void> {
   // 14. Setup input — location-based activities
   let movementPath: TileCoord[] = [];
   let movementIndex = 0;
-  let movementTimer = 0; // accumulates delta ms between tile steps
-  let tilesMoved = 0; // tracks tiles for stamina XP awards
+  let movementTimer = 0;
+  let tilesMoved = 0;
 
-  /** Calculate move delay based on stamina level (higher = faster). */
   function getMoveDelay(): number {
     const staminaLevel = gameStore.getState().skills.stamina?.level ?? 1;
-    // Linear interpolation from BASE (level 1) to MIN (level 99)
     const t = (staminaLevel - 1) / 98;
     return BASE_MOVE_DELAY_MS - t * (BASE_MOVE_DELAY_MS - MIN_MOVE_DELAY_MS);
   }
@@ -249,7 +241,6 @@ export async function init(): Promise<void> {
     targetTile: TileCoord;
   } | null = null;
 
-  /** Structure type → modal id mapping */
   const STRUCTURE_MODALS: Record<string, string> = {
     bank: "bank",
     forge: "forge",
@@ -257,10 +248,9 @@ export async function init(): Promise<void> {
     shop: "shop",
   };
 
-  /** Walk to a structure tile and open its modal on arrival. */
   function walkToAndOpenStructure(structureType: string, targetTile: TileCoord): void {
     const from = gameStore.getState().player.position;
-    const path = findPathToAdjacent(map.tiles, from, targetTile);
+    const path = findPathToAdjacent(mapIndex, from, targetTile);
     if (path && path.length > 1) {
       pendingStructure = { structureType, targetTile };
       pendingActivity = null;
@@ -269,7 +259,6 @@ export async function init(): Promise<void> {
       movementTimer = 0;
       gameStore.getState().setAction({ type: "idle" });
     } else if (path && path.length <= 1) {
-      // Already adjacent
       const modalId = STRUCTURE_MODALS[structureType];
       if (modalId) uiStore.getState().openModal(modalId);
     } else {
@@ -277,7 +266,6 @@ export async function init(): Promise<void> {
     }
   }
 
-  /** Set a pending activity and pathfind to the target tile. */
   function walkToAndStartActivity(
     activityId: string,
     nodeId: string,
@@ -285,23 +273,21 @@ export async function init(): Promise<void> {
     tickDuration: number,
   ): void {
     const from = gameStore.getState().player.position;
-    const path = findPathToAdjacent(map.tiles, from, targetTile);
+    const path = findPathToAdjacent(mapIndex, from, targetTile);
     if (path && path.length > 1) {
       pendingActivity = { activityId, nodeId, targetTile, tickDuration };
       movementPath = path;
       movementIndex = 1;
       movementTimer = 0;
-      gameStore.getState().setAction({ type: "idle" }); // stop current action while walking
+      gameStore.getState().setAction({ type: "idle" });
       pushNotification(`Walking to ${activityId}...`);
     } else if (path && path.length <= 1) {
-      // Already adjacent to the node
       startActivityAtNode(activityId, nodeId, tickDuration);
     } else {
       pushNotification("Can't reach that location.");
     }
   }
 
-  /** Start an activity (player already at node). */
   function startActivityAtNode(activityId: string, nodeId: string, tickDuration: number): void {
     pushNotification(`Started: ${activityId}`);
     gameStore.getState().setAction({
@@ -312,55 +298,54 @@ export async function init(): Promise<void> {
     });
   }
 
-  // Expose walkToAndStartActivity for the skill-detail modal
+  // Expose for skill-detail modal
   (window as any).__walkToActivity = walkToAndStartActivity;
-  (window as any).__briarwoodMap = map;
+  (window as any).__gameMap = gameMap;
 
   setupMouseInput(
     canvas,
     sceneCtx,
-    map.tiles,
+    mapIndex,
     spriteRenderer,
     () => gameStore.getState().player.position,
     (path) => {
-      pendingActivity = null; // cancel pending if clicking elsewhere
+      pendingActivity = null;
       pendingStructure = null;
       movementPath = path;
       movementIndex = 1;
       movementTimer = 0;
-      // Stop current activity when player moves away
       const action = gameStore.getState().actionQueue[0];
       if (action && action.type !== "idle") {
         gameStore.getState().setAction({ type: "idle" });
         pushNotification("Stopped activity — moving away.");
       }
     },
-    (tile, coord) => {
-      if (tile.resourceNode) {
-        // Walk to the resource node, then start gathering
-        const def = ctx.activities.gather[tile.resourceNode.activityId];
+    (obj: MapObject, coord: TileCoord) => {
+      if (obj.interaction?.kind === "resource") {
+        const def = ctx.activities.gather[obj.interaction.activityId];
         walkToAndStartActivity(
-          tile.resourceNode.activityId,
-          tile.resourceNode.nodeId,
+          obj.interaction.activityId,
+          obj.interaction.nodeId,
           coord,
           def?.baseTickDuration ?? 7,
         );
-        return; // don't also pathfind via onMoveTo
-      }
-      if (tile.structure) {
-        walkToAndOpenStructure(tile.structure, coord);
-        // Also handle quest talk objectives
+      } else if (obj.interaction?.kind === "structure") {
+        walkToAndOpenStructure(obj.interaction.structureType, coord);
+        // Quest talk objectives
         const currentState = gameStore.getState();
         for (const [questId, quest] of Object.entries(QUESTS)) {
           if (currentState.quests[questId] !== "active") continue;
-          for (const obj of quest.objectives) {
-            if (obj.type === "talk") {
-              gameStore.getState().updateQuestProgress(questId, obj.objectiveId, 1);
-              pushNotification(`Talked to ${obj.npcId}!`);
+          for (const qObj of quest.objectives) {
+            if (qObj.type === "talk") {
+              gameStore.getState().updateQuestProgress(questId, qObj.objectiveId, 1);
+              pushNotification(`Talked to ${qObj.npcId}!`);
             }
           }
         }
       }
+    },
+    (_coord: TileCoord) => {
+      // Ground click — no special handling beyond pathfinding (handled by mouse.ts)
     },
   );
 
@@ -381,7 +366,6 @@ export async function init(): Promise<void> {
     const delta = now - lastTime;
     lastTime = now;
 
-    // Update polish systems
     dayNight?.update(delta);
     smoothCamera.update();
     particles.update(delta);
@@ -389,7 +373,6 @@ export async function init(): Promise<void> {
     tileRenderer.updateWater(now);
     tileRenderer.updateFade(delta);
 
-    // Process movement along path (timer-gated, not one tile per frame)
     if (movementPath.length > 0 && movementIndex < movementPath.length) {
       movementTimer += delta;
       const moveDelay = getMoveDelay();
@@ -410,7 +393,6 @@ export async function init(): Promise<void> {
         movementIndex++;
         tilesMoved++;
 
-        // Award stamina XP every 5 tiles walked
         if (tilesMoved % 5 === 0) {
           gameStore.getState().addXp("stamina", 4);
         }
@@ -420,7 +402,6 @@ export async function init(): Promise<void> {
           movementIndex = 0;
           movementTimer = 0;
 
-          // Check if we arrived at a pending activity target
           if (pendingActivity) {
             const pos = gameStore.getState().player.position;
             const dx = Math.abs(pos.col - pendingActivity.targetTile.col);
@@ -435,7 +416,6 @@ export async function init(): Promise<void> {
             pendingActivity = null;
           }
 
-          // Check if we arrived at a pending structure
           if (pendingStructure) {
             const pos = gameStore.getState().player.position;
             const dx = Math.abs(pos.col - pendingStructure.targetTile.col);
