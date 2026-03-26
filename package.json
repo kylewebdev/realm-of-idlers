@@ -12,6 +12,7 @@
     "@google/genai": "catalog:",
     "@types/mime": "catalog:",
     "mime": "catalog:",
+    "sharp": "catalog:",
     "tsx": "catalog:",
     "vite-plus": "catalog:"
   },

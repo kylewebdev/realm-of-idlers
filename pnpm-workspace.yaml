@@ -2,12 +2,21 @@ packages:
   - apps/*
   - packages/*
   - tools/*
+allowBuilds:
+  esbuild: true
+  protobufjs: true
+  sharp: true
 
 catalog:
+  "@google/genai": ^1.46.0
+  "@types/mime": ^4.0.0
   "@types/node": ^24
   "@types/three": ^0.174
   immer: ^10
+  mime: ^4.1.0
+  sharp: ^0.34.5
   three: ^0.174
+  tsx: ^4.21.0
   typescript: ^5
   vite: npm:@voidzero-dev/vite-plus-core@latest
   vite-plus: latest
