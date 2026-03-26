@@ -66,10 +66,26 @@ export function applyTickResultMut(state: GameState, result: TickResult): GameNo
   return notifications;
 }
 
-/** Deep-clone a GameState, preserving Set instances. */
-function cloneState(state: GameState): GameState {
-  const cloned = structuredClone(state);
-  // structuredClone handles Set natively, but let's be explicit
-  cloned.world.exploredTiles = new Set(state.world.exploredTiles);
-  return cloned;
+/** Deep-clone a GameState without copying non-data properties (e.g. Zustand actions). */
+export function cloneState(state: GameState): GameState {
+  return {
+    version: state.version,
+    player: { ...state.player, position: { ...state.player.position } },
+    skills: Object.fromEntries(
+      Object.entries(state.skills).map(([k, v]) => [k, { ...v }]),
+    ) as GameState["skills"],
+    inventory: { slots: state.inventory.slots.map((s) => (s ? { ...s } : null)) },
+    equipment: { equipped: { ...state.equipment.equipped } },
+    bank: { slots: state.bank.slots.map((s) => (s ? { ...s } : null)) },
+    actionQueue: state.actionQueue.map((a) => ({ ...a })),
+    quests: { ...state.quests },
+    world: {
+      resourceNodes: Object.fromEntries(
+        Object.entries(state.world.resourceNodes).map(([k, v]) => [k, { ...v }]),
+      ),
+      exploredTiles: new Set(state.world.exploredTiles),
+    },
+    settings: { ...state.settings },
+    timestamps: { ...state.timestamps },
+  };
 }

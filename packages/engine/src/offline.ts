@@ -1,6 +1,6 @@
 import type { GameState, ItemStack, SkillType } from "@realm-of-idlers/shared";
 import { MAX_OFFLINE_TICKS } from "@realm-of-idlers/shared";
-import { applyTickResultMut } from "./apply.js";
+import { applyTickResultMut, cloneState } from "./apply.js";
 import { tick } from "./tick.js";
 import type { OfflineSummary, TickContext } from "./types.js";
 
@@ -18,8 +18,7 @@ export function simulateOffline(
   const tickCount = Math.min(ticksElapsed, MAX_OFFLINE_TICKS);
 
   // Clone once, mutate in the loop
-  const newState = structuredClone(state);
-  newState.world.exploredTiles = new Set(state.world.exploredTiles);
+  const newState = cloneState(state);
 
   const summary: OfflineSummary = {
     ticksProcessed: tickCount,
