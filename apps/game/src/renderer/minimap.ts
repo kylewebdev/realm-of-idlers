@@ -13,7 +13,7 @@ const MINIMAP_SCALE = 3; // 3px per tile → 192×192 canvas
 
 /**
  * 2D minimap overlay rendered on a separate canvas.
- * Shows terrain colors, player dot, and fog-of-war.
+ * Shows terrain colors and player dot.
  */
 export class Minimap {
   private canvas: HTMLCanvasElement;
@@ -52,18 +52,9 @@ export class Minimap {
     );
   }
 
-  /** Apply fog-of-war mask based on explored tiles. */
-  updateExploredTiles(explored: Set<string>): void {
-    // Dim unexplored tiles by overlaying dark pixels
-    this.ctx.putImageData(this.terrainImageData, 0, 0);
-    this.ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
-    for (let row = 0; row < MAP_SIZE; row++) {
-      for (let col = 0; col < MAP_SIZE; col++) {
-        if (!explored.has(`${col},${row}`)) {
-          this.ctx.fillRect(col * MINIMAP_SCALE, row * MINIMAP_SCALE, MINIMAP_SCALE, MINIMAP_SCALE);
-        }
-      }
-    }
+  /** No-op — fog of war removed so the full map is always visible. */
+  updateExploredTiles(_explored: Set<string>): void {
+    // Intentionally empty — full map is always shown
   }
 
   dispose(): void {

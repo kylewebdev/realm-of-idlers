@@ -28,6 +28,11 @@ export class TileRendererManager {
     this.chunkRenderer.updateWater(timeMs);
   }
 
+  /** Tick chunk fade-in/fade-out animations. Call each frame with delta in ms. */
+  updateFade(deltaMs: number): void {
+    this.chunkRenderer.updateFade(deltaMs);
+  }
+
   dispose(): void {
     this.chunkRenderer.dispose();
   }
