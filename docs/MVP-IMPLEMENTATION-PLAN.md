@@ -718,7 +718,7 @@ Author the 64x64 Briarwood map as a typed constant or static JSON asset:
 
 ---
 
-## Step 9: `apps/game` — UI Overlay
+## Step 9: `apps/game` — UI Overlay ✅
 
 **Goal:** Parchment-themed HTML/CSS UI overlay on the Three.js canvas.
 
@@ -760,6 +760,25 @@ Author the 64x64 Briarwood map as a typed constant or static JSON asset:
 - Clicking a skill opens the detail modal
 - Inventory drag/click equip works
 - Event log scrolls and shows recent messages
+
+### Implementation Notes
+
+**Key decisions:**
+
+- **Vanilla DOM, no framework** — All UI components are plain TypeScript creating/updating DOM elements. Each component function returns a Zustand unsubscribe callback for cleanup.
+- **Zustand vanilla UI store** — Separate `uiStore` (panel visibility, modal state, event log) from the game `gameStore`. Both are vanilla Zustand stores (no React dependency).
+- **Reactive updates via `gameStore.subscribe()`** — Each HUD component subscribes to the game store and re-renders on every state change. Simple and effective for this scale.
+- **Skill detail modal** — Click skill → `uiStore.selectSkill()` → modal renders with `getAvailableActivities()` from skills package. "Start" button dispatches `gameStore.setAction()` directly.
+- **Inventory equip/unequip** — Click inventory item with `equipSlot` → calls `equipItem()` from items package. Click equipped slot → `unequipItem()`. Results written to store via `loadState()`.
+- **Event log** — Bridge pushes `GameNotification.message` to `uiStore.pushEvent()` on each tick. Max 50 entries, auto-scroll.
+- **CSS parchment theme** — Dark semi-transparent panels (`rgba(42, 28, 16, 0.9)`), gold accents (`#c9a84c`), stone borders (`#8b7d6b`). Skills left, inventory right, action bottom-center, event log bottom-left, minimap top-right.
+- **Welcome-back modal** — Shows offline `OfflineSummary` on catch-up. Bridge calls `showWelcomeBack(summary)`.
+- **Zustand added to app deps** — `apps/game/package.json` needed zustand directly for the UI store import.
+
+**Impact on future steps:**
+
+- **Step 10 (Quests):** Quest journal UI can be added as a new modal screen. The keyboard "Q" hotkey currently toggles a nonexistent panel — wire it to open a quest journal modal instead.
+- **Step 11 (Polish):** Add crafting interface modal (recipe list), shop modal, bank modal, settings modal. Improve inventory with drag-and-drop. Add combat damage numbers as floating DOM elements.
 
 ---
 

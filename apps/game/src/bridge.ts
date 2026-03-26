@@ -21,6 +21,8 @@ import { SpriteRenderer } from "./renderer/sprite-renderer.js";
 import { Minimap } from "./renderer/minimap.js";
 import { setupMouseInput } from "./input/mouse.js";
 import { setupKeyboard } from "./input/keyboard.js";
+import { initUI, pushNotification, showWelcomeBack } from "./ui/render.js";
+import { uiStore } from "./ui/store.js";
 
 /**
  * Initialize the game: load state, create renderers, wire engine, start loops.
@@ -53,7 +55,10 @@ export async function init(): Promise<void> {
     minimap = new Minimap(minimapContainer, map.tiles);
   }
 
-  // 6. Initial render position
+  // 6. Initialize UI
+  initUI();
+
+  // 7. Initial render position
   const playerPos = gameStore.getState().player.position;
   tileRenderer.update(playerPos.col, playerPos.row);
   spriteRenderer.setPlayerPosition(playerPos.col, playerPos.row);
@@ -76,18 +81,15 @@ export async function init(): Promise<void> {
     minimap?.updateExploredTiles(currentState.world.exploredTiles);
     centerCamera(sceneCtx, pos);
 
-    // Log notifications to console (UI panels in Step 9)
+    // Push notifications to UI event log
     for (const n of notifications) {
-      console.log(`[${n.type}] ${n.message}`);
+      pushNotification(n.message);
     }
   };
 
   const onCatchUp = (summary: OfflineSummary) => {
-    console.log(
-      `[bridge] Offline catch-up: ${summary.ticksProcessed} ticks,`,
-      `XP: ${JSON.stringify(summary.xpGained)},`,
-      `Items: ${summary.itemsGained.length}`,
-    );
+    pushNotification(`Offline: ${summary.ticksProcessed} ticks processed`);
+    showWelcomeBack(summary);
   };
 
   // 9. Create and start the game loop
@@ -130,7 +132,7 @@ export async function init(): Promise<void> {
     },
     (tile, _coord) => {
       if (tile.resourceNode) {
-        console.log(`[input] Starting activity: ${tile.resourceNode.activityId}`);
+        pushNotification(`Starting: ${tile.resourceNode.activityId}`);
         gameStore.getState().setAction({
           type: "gather",
           activityId: tile.resourceNode.activityId,
@@ -142,8 +144,9 @@ export async function init(): Promise<void> {
   );
 
   setupKeyboard((panel) => {
-    console.log(`[input] Toggle panel: ${panel}`);
-    // Panel toggling implemented in Step 9
+    if (panel === "inventory" || panel === "skills" || panel === "action") {
+      uiStore.getState().togglePanel(panel);
+    }
   });
 
   // 13. Start game loop

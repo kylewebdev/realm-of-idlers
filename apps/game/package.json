@@ -16,7 +16,8 @@
     "@realm-of-idlers/skills": "workspace:*",
     "@realm-of-idlers/state": "workspace:*",
     "@realm-of-idlers/world": "workspace:*",
-    "three": "catalog:"
+    "three": "catalog:",
+    "zustand": "catalog:"
   },
   "devDependencies": {
     "@types/three": "catalog:",
