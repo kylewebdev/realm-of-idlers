@@ -13,7 +13,7 @@ import type { TickResult, OfflineSummary, TickContext } from "@realm-of-idlers/e
 import { createTickContext } from "@realm-of-idlers/skills";
 import { createCombatProcessor, MONSTERS } from "@realm-of-idlers/combat";
 import { ITEMS } from "@realm-of-idlers/items";
-import { loadMap, indexMap, findPathToAdjacent } from "@realm-of-idlers/world";
+import { loadMap, indexMapV2, findPathToAdjacent, getGroundV2 } from "@realm-of-idlers/world";
 import type { MapObject } from "@realm-of-idlers/world";
 import { QUESTS } from "./quests/registry.js";
 import { checkQuestProgress, getAvailableQuests } from "./quests/checker.js";
@@ -30,6 +30,7 @@ import { setupMouseInput } from "./input/mouse.js";
 import { setupKeyboard } from "./input/keyboard.js";
 import { initUI, pushNotification, showWelcomeBack } from "./ui/render.js";
 import { uiStore } from "./ui/store.js";
+import { createDebugGui, onDebugParamsChange } from "./renderer/debug-gui.js";
 
 /**
  * Initialize the game: load state, load map, create renderers, wire engine, start loops.
@@ -42,8 +43,8 @@ export async function init(): Promise<void> {
   console.log("[bridge] State loaded:", savedState ? "from save" : "new game");
 
   // 2. Load the map from JSON
-  const gameMap = await loadMap("/maps/briarwood.json");
-  const mapIndex = indexMap(gameMap);
+  const gameMap = await loadMap("/maps/britain.json");
+  const mapIndex = indexMapV2(gameMap);
   console.log(
     `[bridge] Map loaded: ${gameMap.meta.name} (${gameMap.meta.width}x${gameMap.meta.height})`,
   );
@@ -51,12 +52,13 @@ export async function init(): Promise<void> {
   // 3. Setup Three.js scene
   const canvas = document.getElementById("game-canvas") as HTMLCanvasElement;
   if (!canvas) throw new Error("Canvas element #game-canvas not found");
-  const sceneCtx = createScene(canvas);
+  const sceneCtx = createScene(canvas, gameMap.meta.width);
 
   // 4. Create renderers
   const tileRenderer = new TileRendererManager(sceneCtx, gameMap);
   const spriteRenderer = new SpriteRenderer(sceneCtx.scene, gameMap);
   spriteRenderer.setCamera(sceneCtx.camera);
+  await spriteRenderer.loadArtDimensions("/maps/britain.json");
   spriteRenderer.updateSpawnZones(gameMap.spawnZones);
   spriteRenderer.updateEntities();
 
@@ -85,6 +87,14 @@ export async function init(): Promise<void> {
   const damageContainer = document.getElementById("ui-overlay");
   const damageNumbers = damageContainer ? new DamageNumbers(damageContainer) : null;
 
+  // 6b. Debug GUI for renderer tweaking
+  createDebugGui();
+  onDebugParamsChange(() => {
+    // Force sprite rebuild when debug params change
+    spriteRenderer.updateEntities();
+    spriteRenderer.updateNearbyEntities(-999, -999);
+  });
+
   // 7. Initialize UI
   initUI();
 
@@ -99,24 +109,32 @@ export async function init(): Promise<void> {
   tileRenderer.update(playerPos.col, playerPos.row);
   spriteRenderer.setPlayerPosition(playerPos.col, playerPos.row);
   spriteRenderer.snapPlayerPosition();
+  spriteRenderer.updateNearbyEntities(playerPos.col, playerPos.row);
   minimap?.updatePlayerPosition(playerPos.col, playerPos.row);
-  smoothCamera.setTarget(playerPos.col, playerPos.row);
+  const playerElev = getGroundV2(gameMap, playerPos.col, playerPos.row)?.elevation ?? 0;
+  smoothCamera.setTarget(playerPos.col, playerPos.row, playerElev);
   smoothCamera.snap();
 
   // 9. Build TickContext with activities + combat
   const ctx: TickContext = createTickContext();
   ctx.processCombatTick = createCombatProcessor(MONSTERS, ITEMS);
 
+  // Track which quests have already shown notifications (prevents spam)
+  const notifiedQuests = new Set<string>();
+  const notifiedAvailable = new Set<string>();
+
   // 10. Tick callback — update renderers on each game tick
   const onTick = (result: TickResult, notifications: GameNotification[]) => {
     const store = gameStore.getState();
     const pos = store.player.position;
 
+    const elev = getGroundV2(gameMap, pos.col, pos.row)?.elevation ?? 0;
     tileRenderer.update(pos.col, pos.row);
     spriteRenderer.setPlayerPosition(pos.col, pos.row);
+    spriteRenderer.updateNearbyEntities(pos.col, pos.row);
     minimap?.updatePlayerPosition(pos.col, pos.row);
     minimap?.updateExploredTiles(store.world.exploredTiles);
-    smoothCamera.setTarget(pos.col, pos.row);
+    smoothCamera.setTarget(pos.col, pos.row, elev);
 
     for (const n of notifications) {
       pushNotification(n.message);
@@ -127,13 +145,13 @@ export async function init(): Promise<void> {
       if (action?.type === "gather") {
         const actId = action.activityId;
         const pType = actId.includes("chop") ? "wood" : actId.includes("mine") ? "ore" : "fish";
-        particles.spawnGatherParticle(pos.col, pos.row, pType);
+        particles.spawnGatherParticle(pos.col, pos.row, pType, elev);
       }
     }
 
     for (const n of notifications) {
       if (n.type === "level_up") {
-        particles.spawnLevelUpParticle(pos.col, pos.row);
+        particles.spawnLevelUpParticle(pos.col, pos.row, elev);
       }
     }
 
@@ -174,7 +192,8 @@ export async function init(): Promise<void> {
 
     const questUpdates = checkQuestProgress(gameStore.getState(), QUESTS);
     for (const update of questUpdates) {
-      if (update.completed) {
+      if (update.completed && !notifiedQuests.has(update.questId)) {
+        notifiedQuests.add(update.questId);
         const quest = QUESTS[update.questId];
         if (quest) pushNotification(`Quest ready to claim: ${quest.name}`);
       }
@@ -182,8 +201,11 @@ export async function init(): Promise<void> {
 
     const available = getAvailableQuests(gameStore.getState(), QUESTS);
     for (const quest of available) {
-      gameStore.getState().setQuestStatus(quest.id, "available");
-      pushNotification(`New quest available: ${quest.name}`);
+      if (!notifiedAvailable.has(quest.id)) {
+        notifiedAvailable.add(quest.id);
+        gameStore.getState().setQuestStatus(quest.id, "available");
+        pushNotification(`New quest available: ${quest.name}`);
+      }
     }
   };
 
@@ -307,6 +329,7 @@ export async function init(): Promise<void> {
     sceneCtx,
     mapIndex,
     spriteRenderer,
+    tileRenderer,
     () => gameStore.getState().player.position,
     (path) => {
       pendingActivity = null;
@@ -386,9 +409,11 @@ export async function init(): Promise<void> {
         gameStore.getState().addExploredTile(`${nextTile.col},${nextTile.row}`);
 
         spriteRenderer.setPlayerPosition(nextTile.col, nextTile.row);
+        spriteRenderer.updateNearbyEntities(nextTile.col, nextTile.row);
         tileRenderer.update(nextTile.col, nextTile.row);
         minimap?.updatePlayerPosition(nextTile.col, nextTile.row);
-        smoothCamera.setTarget(nextTile.col, nextTile.row);
+        const nextElev = getGroundV2(gameMap, nextTile.col, nextTile.row)?.elevation ?? 0;
+        smoothCamera.setTarget(nextTile.col, nextTile.row, nextElev);
 
         movementIndex++;
         tilesMoved++;

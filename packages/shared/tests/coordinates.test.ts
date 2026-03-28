@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 import { tileToWorld, worldToTile } from "../src/coordinates";
+import { ELEV_SCALE } from "../src/constants";
 
 describe("coordinate round-trips", () => {
   it("worldToTile(tileToWorld(c, r)) returns original coordinates", () => {
@@ -41,6 +42,15 @@ describe("coordinate round-trips", () => {
     const elevated = tileToWorld(5, 10, 2);
     expect(elevated.x).toBe(5);
     expect(elevated.z).toBe(10);
-    expect(elevated.y).toBe(1); // elevation * 0.5
+    expect(elevated.y).toBeCloseTo(2 * ELEV_SCALE);
+  });
+
+  it("elevation scales UO Z values to world Y", () => {
+    // UO Britain range: roughly -20 to 61
+    const low = tileToWorld(0, 0, -20);
+    const high = tileToWorld(0, 0, 61);
+    expect(low.y).toBeCloseTo(-20 * ELEV_SCALE);
+    expect(high.y).toBeCloseTo(61 * ELEV_SCALE);
+    expect(high.y).toBeGreaterThan(low.y);
   });
 });

@@ -1,8 +1,6 @@
 import { CHUNK_SIZE, MAP_SIZE } from "@realm-of-idlers/shared";
 import type { ChunkCoord } from "./types.js";
 
-const CHUNKS_PER_AXIS = MAP_SIZE / CHUNK_SIZE; // 8
-
 /** Convert a tile coordinate to its containing chunk. */
 export function tileToChunk(col: number, row: number): ChunkCoord {
   return {
@@ -31,14 +29,16 @@ export function getVisibleChunks(
   centerCol: number,
   centerRow: number,
   viewRadius: number = 2,
+  mapSize: number = MAP_SIZE,
 ): ChunkCoord[] {
+  const chunksPerAxis = Math.ceil(mapSize / CHUNK_SIZE);
   const center = tileToChunk(centerCol, centerRow);
   const chunks: ChunkCoord[] = [];
 
   const minChunkCol = Math.max(0, center.chunkCol - viewRadius);
-  const maxChunkCol = Math.min(CHUNKS_PER_AXIS - 1, center.chunkCol + viewRadius);
+  const maxChunkCol = Math.min(chunksPerAxis - 1, center.chunkCol + viewRadius);
   const minChunkRow = Math.max(0, center.chunkRow - viewRadius);
-  const maxChunkRow = Math.min(CHUNKS_PER_AXIS - 1, center.chunkRow + viewRadius);
+  const maxChunkRow = Math.min(chunksPerAxis - 1, center.chunkRow + viewRadius);
 
   for (let cr = minChunkRow; cr <= maxChunkRow; cr++) {
     for (let cc = minChunkCol; cc <= maxChunkCol; cc++) {

@@ -13,28 +13,29 @@ export interface SceneContext {
  * lights, and a ground plane for raycasting.
  *
  * Coordinate system: X/Z = ground plane (1 unit per tile), Y = up.
- * Map is 64×64 units. Camera sees ~30 tiles wide.
+ * Camera sees ~16 tiles wide.
  */
-export function createScene(canvas: HTMLCanvasElement): SceneContext {
+export function createScene(canvas: HTMLCanvasElement, mapSize = 256): SceneContext {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87ceeb);
-  scene.fog = new THREE.Fog(0x87ceeb, 60, 120);
+  scene.fog = null; // Disabled — was hiding terrain on large maps
 
   // Orthographic camera — isometric angle
   const aspect = window.innerWidth / window.innerHeight;
-  const viewSize = 15;
+  const viewSize = 8;
+  const halfMap = mapSize / 2;
   const camera = new THREE.OrthographicCamera(
     -viewSize * aspect,
     viewSize * aspect,
     viewSize,
     -viewSize,
     0.1,
-    200,
+    400,
   );
 
-  // Position camera above and behind, looking down at isometric angle
-  camera.position.set(32 + 20, 25, 32 + 20);
-  camera.lookAt(32, 0, 32);
+  // Isometric camera angle: ~35.26° elevation (standard isometric)
+  camera.position.set(halfMap + 20, 28, halfMap + 20);
+  camera.lookAt(halfMap, 0, halfMap);
 
   // Lights
   const dirLight = new THREE.DirectionalLight(0xfff4e0, 1.2);
@@ -50,11 +51,12 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 
   // Ground plane for raycasting (invisible, covers entire map)
-  const groundGeometry = new THREE.PlaneGeometry(128, 128);
+  const planeSize = mapSize * 2;
+  const groundGeometry = new THREE.PlaneGeometry(planeSize, planeSize);
   const groundMaterial = new THREE.MeshBasicMaterial({ visible: false });
   const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
   groundPlane.rotation.x = -Math.PI / 2;
-  groundPlane.position.set(32, 0, 32); // center on map
+  groundPlane.position.set(halfMap, 0, halfMap);
   scene.add(groundPlane);
 
   const raycaster = new THREE.Raycaster();
@@ -69,7 +71,7 @@ export function createScene(canvas: HTMLCanvasElement): SceneContext {
 /** Update camera and renderer on window resize. */
 export function resizeCamera(ctx: SceneContext): void {
   const aspect = window.innerWidth / window.innerHeight;
-  const viewSize = 15;
+  const viewSize = 8;
   ctx.camera.left = -viewSize * aspect;
   ctx.camera.right = viewSize * aspect;
   ctx.camera.top = viewSize;

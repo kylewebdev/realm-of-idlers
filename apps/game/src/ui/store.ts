@@ -1,7 +1,7 @@
 import { createStore } from "zustand/vanilla";
 import type { SkillType } from "@realm-of-idlers/shared";
 
-export type TabId = "inventory" | "skills" | "equipment";
+export type TabId = "inventory" | "skills" | "equipment" | "debug";
 
 export interface UIState {
   activeTab: TabId;

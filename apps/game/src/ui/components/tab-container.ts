@@ -3,11 +3,13 @@ import type { TabId } from "../store.js";
 import { createInventoryPanel } from "./inventory-panel.js";
 import { createSkillPanel } from "./skill-panel.js";
 import { createEquipmentPanel } from "./equipment-panel.js";
+import { createDebugPanel } from "./debug-panel.js";
 
 const TABS: { id: TabId; label: string; key: string }[] = [
   { id: "inventory", label: "Inventory", key: "I" },
   { id: "skills", label: "Skills", key: "S" },
   { id: "equipment", label: "Equipment", key: "E" },
+  { id: "debug", label: "Debug", key: "D" },
 ];
 
 export function createTabContainer(container: HTMLElement): () => void {
@@ -85,6 +87,9 @@ export function createTabContainer(container: HTMLElement): () => void {
         break;
       case "equipment":
         activeUnsub = createEquipmentPanel(panelEl);
+        break;
+      case "debug":
+        activeUnsub = createDebugPanel(panelEl);
         break;
     }
   }

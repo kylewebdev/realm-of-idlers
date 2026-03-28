@@ -44,19 +44,24 @@ export class ParticleSystem {
   }
 
   /** Spawn particles for a gathering action completion. */
-  spawnGatherParticle(col: number, row: number, type: "wood" | "ore" | "fish"): void {
-    const pos = tileToWorld(col, row, 0);
+  spawnGatherParticle(
+    col: number,
+    row: number,
+    type: "wood" | "ore" | "fish",
+    elevation = 0,
+  ): void {
+    const pos = tileToWorld(col, row, elevation);
     const color = PARTICLE_COLORS[type];
     for (let i = 0; i < 5; i++) {
-      this.spawn(pos.x, pos.z, color, 0.8);
+      this.spawn(pos.x, pos.y, pos.z, color, 0.8);
     }
   }
 
   /** Spawn a burst of gold particles for level-up. */
-  spawnLevelUpParticle(col: number, row: number): void {
-    const pos = tileToWorld(col, row, 0);
+  spawnLevelUpParticle(col: number, row: number, elevation = 0): void {
+    const pos = tileToWorld(col, row, elevation);
     for (let i = 0; i < 10; i++) {
-      this.spawn(pos.x, pos.z, PARTICLE_COLORS.levelup, 1.2);
+      this.spawn(pos.x, pos.y, pos.z, PARTICLE_COLORS.levelup, 1.2);
     }
   }
 
@@ -90,7 +95,7 @@ export class ParticleSystem {
     this.pool = [];
   }
 
-  private spawn(x: number, z: number, color: number, lifetime: number): void {
+  private spawn(x: number, baseY: number, z: number, color: number, lifetime: number): void {
     const p = this.pool.find((p) => !p.active);
     if (!p) return;
 
@@ -98,7 +103,11 @@ export class ParticleSystem {
     p.age = 0;
     p.lifetime = lifetime;
     p.mesh.visible = true;
-    p.mesh.position.set(x + (Math.random() - 0.5) * 0.5, 0.5, z + (Math.random() - 0.5) * 0.5);
+    p.mesh.position.set(
+      x + (Math.random() - 0.5) * 0.5,
+      baseY + 0.5,
+      z + (Math.random() - 0.5) * 0.5,
+    );
     p.velocity.set((Math.random() - 0.5) * 2, 1.5 + Math.random(), (Math.random() - 0.5) * 2);
     (p.mesh.material as THREE.MeshBasicMaterial).color.setHex(color);
     (p.mesh.material as THREE.MeshBasicMaterial).opacity = 1;

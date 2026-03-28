@@ -33,7 +33,7 @@ export function createNewGameState(playerName: string): GameState {
     version: CURRENT_SAVE_VERSION,
     player: {
       name: playerName,
-      position: { col: 32, row: 32 }, // Town center
+      position: { col: 256, row: 232 }, // Britain town center
       gold: 0,
     },
     skills: defaultSkills(),

@@ -108,3 +108,44 @@ export interface ChunkCoord {
   chunkCol: number;
   chunkRow: number;
 }
+
+// ---------------------------------------------------------------------------
+// V2 two-layer map types (UO-style tiling)
+// ---------------------------------------------------------------------------
+
+/** Ground layer cell using numeric tile IDs (V2). */
+export interface GroundCellV2 {
+  tileId: number;
+  /** UO texmap ID for rendering — maps to `/tiles/texmap/{texId}.png`. */
+  texId?: number;
+  elevation: number;
+}
+
+/** A placed static on the map (unified objects + walls). */
+export interface MapStatic {
+  col: number;
+  row: number;
+  z: number;
+  staticId: string;
+  /** UO item graphic ID — maps to `/sprites/item/{graphicId}.png`. */
+  graphicId?: number;
+  /** UO tiledata height — vertical extent for stacking/collision (NOT visual position). */
+  itemHeight?: number;
+  flags: number;
+  edge?: WallEdge;
+  interaction?: ObjectInteraction;
+}
+
+/** V2 map file format with numeric tile IDs and unified statics. */
+export interface GameMapV2 {
+  meta: { name: string; version: 2; width: number; height: number };
+  ground: GroundCellV2[][];
+  statics: MapStatic[];
+  spawnZones: MapSpawnZone[];
+}
+
+/** Runtime index built from a GameMapV2. */
+export interface MapIndexV2 {
+  map: GameMapV2;
+  staticGrid: Map<string, MapStatic[]>; // "col,row" -> sorted list
+}

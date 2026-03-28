@@ -13,8 +13,14 @@ export const TILE_SIZE = 64;
 /** Tiles per chunk side (chunks are CHUNK_SIZE x CHUNK_SIZE) */
 export const CHUNK_SIZE = 8;
 
-/** Total map dimensions for Briarwood in tiles */
-export const MAP_SIZE = 64;
+/** Default map dimensions in tiles (used as fallback; actual size comes from map meta) */
+export const MAP_SIZE = 512;
+
+/** Maximum terrain elevation level (UO raw Z range is ~-128 to 127) */
+export const MAX_ELEVATION = 127;
+
+/** Scale factor converting raw UO Z elevation to Three.js world Y units */
+export const ELEV_SCALE = 0.06;
 
 /** Inventory slot count */
 export const INVENTORY_SLOTS = 28;

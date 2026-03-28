@@ -13,6 +13,7 @@
     "@types/mime": "catalog:",
     "mime": "catalog:",
     "sharp": "catalog:",
+    "simplex-noise": "catalog:",
     "tsx": "catalog:",
     "vite-plus": "catalog:"
   },

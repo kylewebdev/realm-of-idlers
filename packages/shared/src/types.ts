@@ -33,7 +33,25 @@ export interface ItemStack {
 export type NodeId = string;
 export type StructureId = string;
 export type DecorationId = string;
-export type TerrainType = "grass" | "dirt" | "stone" | "water";
+export type TerrainType =
+  | "grass"
+  | "dirt"
+  | "stone"
+  | "water"
+  | "sand"
+  | "forest"
+  | "jungle"
+  | "snow"
+  | "cave"
+  | "brick"
+  | "cobblestones"
+  | "sandstone"
+  | "wood"
+  | "tile"
+  | "farmland"
+  | "lava"
+  | "marble"
+  | "flagstone";
 
 export interface TileCoord {
   col: number;

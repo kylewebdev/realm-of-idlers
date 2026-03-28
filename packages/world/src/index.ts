@@ -1,15 +1,4 @@
-// Legacy types (used during migration)
-export type {
-  TileData,
-  TileMap,
-  BriarwoodMap,
-  ResourceNodeDef,
-  SpawnZone,
-  StructureType,
-  ChunkCoord,
-} from "./types.js";
-
-// New two-layer types
+// Types
 export type {
   GroundCell,
   ObjectTypeId,
@@ -21,28 +10,44 @@ export type {
   MapSpawnZone,
   GameMap,
   MapIndex,
+  GroundCellV2,
+  MapStatic,
+  GameMapV2,
+  MapIndexV2,
 } from "./types.js";
 
-// Legacy map (used during migration)
-export { createBriarwoodMap, getTile } from "./briarwood.js";
-export { isWalkable as isWalkableLegacy } from "./briarwood.js";
-
-// New map loader
+// Map loader
 export {
   loadMap,
-  indexMap,
   getGround,
   getObject,
   isWalkable,
-  hasWall,
-  isWallBlocked,
+  migrateV1toV2,
+  indexMapV2,
+  getGroundV2,
+  getStaticsAt,
+  isWalkableV2,
+  hasWallV2,
+  isWallBlockedV2,
+  getElevationAt,
 } from "./map-loader.js";
 
-// Object & wall registries
-export { OBJECT_TYPES, getObjectType } from "./object-registry.js";
-export type { ObjectTypeDef } from "./object-registry.js";
-export { WALL_TYPES, getWallType } from "./wall-registry.js";
-export type { WallTypeDef } from "./wall-registry.js";
+// Tile data + static registries
+export {
+  TileFlag,
+  LAND_TILES,
+  TERRAIN_TO_TILE_ID,
+  TILE_ID_TO_TERRAIN,
+  hasFlag,
+  getLandTile,
+} from "./tile-data.js";
+export type { TileFlags, LandTileDef } from "./tile-data.js";
+export { STATIC_TILES, getStaticTile } from "./static-registry.js";
+export type { StaticTileDef } from "./static-registry.js";
+
+// Multi/Prefab
+export { MULTI_DEFS, expandMulti } from "./multi.js";
+export type { MultiDef, MultiComponent } from "./multi.js";
 
 // Pathfinding
 export { findPath, findPathToAdjacent } from "./pathfinding.js";

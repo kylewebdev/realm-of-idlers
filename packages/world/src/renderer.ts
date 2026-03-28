@@ -1,8 +1,9 @@
 import * as THREE from "three";
-import { tileToWorld } from "@realm-of-idlers/shared";
-import type { GameMap } from "./types.js";
+import { ELEV_SCALE } from "@realm-of-idlers/shared";
+import type { GameMap, GameMapV2 } from "./types.js";
 import { getChunkTiles, getVisibleChunks } from "./chunks.js";
-import { getGround } from "./map-loader.js";
+import { getGround, getGroundV2, getElevationAt } from "./map-loader.js";
+import { getLandTile, TileFlag, hasFlag } from "./tile-data.js";
 
 /** Fallback colors if textures aren't loaded yet. */
 const TERRAIN_COLORS: Record<string, number> = {
@@ -10,115 +11,181 @@ const TERRAIN_COLORS: Record<string, number> = {
   dirt: 0x8b7355,
   stone: 0x888888,
   water: 0x3a6ea5,
+  sand: 0xc2b280,
+  forest: 0x2d5a1e,
+  jungle: 0x1a5c2a,
+  snow: 0xe8e8e8,
+  cave: 0x4a4a4a,
+  brick: 0x8b4513,
+  sandstone: 0xd2a679,
+  wood: 0x8b6914,
+  tile: 0xa0856c,
+  farmland: 0x6b4226,
+  lava: 0xcc3300,
+  cobblestones: 0x5a5550,
+  marble: 0xc0b8b0,
+  flagstone: 0x908070,
 };
 
-const CLIFF_COLORS: Record<string, number> = {
-  grass: 0x3a6230,
-  dirt: 0x6b5640,
-  stone: 0x666666,
-  water: 0x2a5580,
-};
-
-const TERRAIN_TYPES = ["grass", "dirt", "stone", "water"] as const;
-
-/**
- * Renders visible tile chunks as Three.js meshes.
- *
- * Uses color-coded planes per terrain type as placeholders
- * until texture atlases are added in Step 8.
- */
 /** Seconds for chunks to fade in/out. */
 const CHUNK_FADE_DURATION = 0.35;
+
+/** Vertices per tile (2 triangles × 3 vertices). */
+const VERTS_PER_TILE = 6;
 
 interface FadingChunk {
   group: THREE.Group;
   opacity: number;
   direction: "in" | "out";
-  materials: THREE.MeshBasicMaterial[];
+  materials: THREE.Material[];
 }
 
+/**
+ * Renders visible tile chunks as heightmap meshes.
+ * Each chunk is a single BufferGeometry with per-vertex elevation
+ * from UO-style stretched land corner sampling.
+ */
 export class ChunkRenderer {
   private activeChunks = new Map<string, THREE.Group>();
   private fadingChunks = new Map<string, FadingChunk>();
-  /** Loaded textures — shared across all chunk materials. */
-  private terrainTextures: Record<string, THREE.Texture | null> = {};
-  private cliffTextures: Record<string, THREE.Texture | null> = {};
-  /** Fallback colors used until textures load. */
-  private terrainColors = TERRAIN_COLORS;
-  private cliffColorMap = CLIFF_COLORS;
+  /** Textures keyed by texId (UO texmap) or sprite name (V1 fallback). */
+  private terrainTextures = new Map<string, THREE.Texture | null>();
+  /** Material cache keyed by texId or sprite name. */
+  private terrainMaterials = new Map<string, THREE.MeshLambertMaterial>();
   private pendingRebuild = false;
+  private isV2: boolean;
 
   constructor(
     private scene: THREE.Scene,
-    private gameMap: GameMap,
+    private gameMap: GameMap | GameMapV2,
   ) {
+    this.isV2 = gameMap.meta.version === 2;
+
     const loader = new THREE.TextureLoader();
-    let pending = 0;
+    const texKeys = this.getUniqueTextureKeys();
+    let pending = texKeys.length;
+    let loaded = 0;
+    let failed = 0;
+
+    console.log(`[ChunkRenderer] Loading ${pending} terrain textures`);
+
+    if (pending === 0) {
+      console.warn("[ChunkRenderer] No terrain textures found — using fallback colors");
+      this.pendingRebuild = true;
+    }
+
+    const applyTexSettings = (t: THREE.Texture) => {
+      t.magFilter = THREE.NearestFilter;
+      t.minFilter = THREE.LinearMipmapLinearFilter;
+      t.generateMipmaps = true;
+      t.colorSpace = THREE.SRGBColorSpace;
+    };
+
     const onLoaded = () => {
       pending--;
       if (pending <= 0) {
+        console.log(`[ChunkRenderer] All textures processed: ${loaded} loaded, ${failed} failed`);
         this.pendingRebuild = true;
       }
     };
 
-    for (const terrain of TERRAIN_TYPES) {
-      this.terrainTextures[terrain] = null;
-      this.cliffTextures[terrain] = null;
-
-      pending++;
+    for (const { key, path } of texKeys) {
+      this.terrainTextures.set(key, null);
       loader.load(
-        `/tiles/${terrain}.png`,
+        path,
         (t) => {
-          t.magFilter = THREE.NearestFilter;
-          t.minFilter = THREE.LinearMipmapLinearFilter;
-          t.generateMipmaps = true;
-          t.colorSpace = THREE.SRGBColorSpace;
-          this.terrainTextures[terrain] = t;
+          applyTexSettings(t);
+          this.terrainTextures.set(key, t);
+          this.terrainMaterials.delete(key);
+          loaded++;
           onLoaded();
         },
         undefined,
-        onLoaded,
-      ); // count errors as loaded to not block
-
-      pending++;
-      loader.load(
-        `/tiles/${terrain}-cliff.png`,
-        (t) => {
-          t.magFilter = THREE.NearestFilter;
-          t.minFilter = THREE.LinearMipmapLinearFilter;
-          t.generateMipmaps = true;
-          t.colorSpace = THREE.SRGBColorSpace;
-          this.cliffTextures[terrain] = t;
+        () => {
+          failed++;
           onLoaded();
         },
-        undefined,
-        onLoaded,
       );
     }
   }
 
-  /** Create a material for a terrain type — uses texture if loaded, else color. */
-  private makeTerrainMat(terrain: string): THREE.MeshBasicMaterial {
-    const tex = this.terrainTextures[terrain];
-    if (tex) {
-      return new THREE.MeshBasicMaterial({ map: tex });
+  /** Collect unique texture keys and paths from the map. */
+  private getUniqueTextureKeys(): { key: string; path: string }[] {
+    if (this.isV2) {
+      const v2 = this.gameMap as GameMapV2;
+      const seen = new Set<string>();
+      const keys: { key: string; path: string }[] = [];
+      for (const row of v2.ground) {
+        for (const cell of row) {
+          // Prefer texId (UO texmap), fall back to tileId sprite name
+          if (cell.texId && cell.texId > 0) {
+            const k = `t${cell.texId}`;
+            if (!seen.has(k)) {
+              seen.add(k);
+              keys.push({ key: k, path: `/tiles/texmap/${cell.texId}.png` });
+            }
+          } else {
+            const landTile = getLandTile(cell.tileId);
+            const sprite = landTile?.sprite ?? "grass";
+            if (!seen.has(sprite)) {
+              seen.add(sprite);
+              keys.push({ key: sprite, path: `/tiles/${sprite}.png` });
+            }
+          }
+        }
+      }
+      return keys;
     }
-    return new THREE.MeshBasicMaterial({ color: this.terrainColors[terrain] ?? 0x888888 });
+    // V1 fallback
+    const names = ["grass", "dirt", "stone", "water"];
+    return names.map((n) => ({ key: n, path: `/tiles/${n}.png` }));
   }
 
-  /** Create a material for a cliff face. */
-  private makeCliffMat(terrain: string): THREE.MeshBasicMaterial {
-    const tex = this.cliffTextures[terrain];
-    if (tex) {
-      return new THREE.MeshBasicMaterial({ map: tex });
+  /** Get or create a LambertMaterial for a texture key. */
+  private getTerrainMaterial(texKey: string, fallbackColor: number): THREE.MeshLambertMaterial {
+    const cached = this.terrainMaterials.get(texKey);
+    if (cached) return cached;
+
+    const tex = this.terrainTextures.get(texKey);
+    const mat = tex
+      ? new THREE.MeshLambertMaterial({ map: tex })
+      : new THREE.MeshLambertMaterial({ color: fallbackColor });
+    this.terrainMaterials.set(texKey, mat);
+    return mat;
+  }
+
+  /** Get terrain info for a cell. */
+  private getCellInfo(
+    col: number,
+    row: number,
+  ): { texKey: string; fallbackColor: number; elevation: number; isWater: boolean } | null {
+    if (this.isV2) {
+      const cell = getGroundV2(this.gameMap as GameMapV2, col, row);
+      if (!cell) return null;
+      const landTile = getLandTile(cell.tileId);
+      // Use texId key if available, otherwise sprite name
+      const texKey =
+        cell.texId && cell.texId > 0 ? `t${cell.texId}` : (landTile?.sprite ?? "grass");
+      return {
+        texKey,
+        fallbackColor: landTile?.fallbackColor ?? 0x888888,
+        elevation: cell.elevation ?? 0,
+        isWater: landTile ? hasFlag(landTile.flags, TileFlag.Wet) : false,
+      };
     }
-    return new THREE.MeshBasicMaterial({ color: this.cliffColorMap[terrain] ?? 0x666666 });
+    const cell = getGround(this.gameMap as GameMap, col, row);
+    if (!cell) return null;
+    return {
+      texKey: cell.terrain,
+      fallbackColor: TERRAIN_COLORS[cell.terrain] ?? 0x888888,
+      elevation: cell.elevation,
+      isWater: cell.terrain === "water",
+    };
   }
 
   /** Animate water materials across all active chunks. */
   updateWater(_timeMs: number): void {
-    // Water animation is subtle enough that static textures look fine for now.
-    // TODO: animate water UVs or tint if desired.
+    // Water animation placeholder
   }
 
   /** True when textures finished loading and chunks need rebuilding. */
@@ -126,11 +193,27 @@ export class ChunkRenderer {
     return this.pendingRebuild;
   }
 
+  /** Get all active terrain meshes for raycasting. */
+  getTerrainMeshes(): THREE.Mesh[] {
+    const meshes: THREE.Mesh[] = [];
+    for (const [, group] of this.activeChunks) {
+      group.traverse((child) => {
+        if (child instanceof THREE.Mesh) meshes.push(child);
+      });
+    }
+    return meshes;
+  }
+
   /** Update which chunks are rendered based on player position. */
   updateVisibleChunks(centerCol: number, centerRow: number): void {
-    // If textures just finished loading, rebuild all chunks
     if (this.pendingRebuild) {
       this.pendingRebuild = false;
+      let textured = 0;
+      for (const t of this.terrainTextures.values()) if (t !== null) textured++;
+      console.log(
+        `[ChunkRenderer] Rebuilding chunks — ${textured}/${this.terrainTextures.size} textures available`,
+      );
+      this.terrainMaterials.clear();
       for (const [, group] of this.activeChunks) {
         this.scene.remove(group);
       }
@@ -138,19 +221,18 @@ export class ChunkRenderer {
       this.fadingChunks.clear();
     }
 
-    const visible = getVisibleChunks(centerCol, centerRow, 4);
+    const mapSize = Math.max(this.gameMap.meta.width, this.gameMap.meta.height);
+    const visible = getVisibleChunks(centerCol, centerRow, 4, mapSize);
     const visibleKeys = new Set(visible.map((c) => chunkKey(c.chunkCol, c.chunkRow)));
 
-    // Fade out chunks no longer visible
     for (const [key, group] of this.activeChunks) {
       if (!visibleKeys.has(key)) {
         this.activeChunks.delete(key);
-        const mats = this.collectGroupMaterials(group);
+        const mats = this.collectMaterials(group);
         this.fadingChunks.set(key, { group, opacity: 1, direction: "out", materials: mats });
       }
     }
 
-    // Add newly visible chunks (start transparent, fade in)
     for (const chunk of visible) {
       const key = chunkKey(chunk.chunkCol, chunk.chunkRow);
       if (!this.activeChunks.has(key)) {
@@ -162,7 +244,7 @@ export class ChunkRenderer {
         }
 
         const group = this.createChunkGroup(chunk.chunkCol, chunk.chunkRow);
-        const mats = this.collectGroupMaterials(group);
+        const mats = this.collectMaterials(group);
         for (const mat of mats) {
           mat.transparent = true;
           mat.opacity = 0;
@@ -190,12 +272,10 @@ export class ChunkRenderer {
         mat.opacity = fade.opacity;
       }
 
-      // Done fading in — clean up
       if (fade.direction === "in" && fade.opacity >= 1) {
         this.fadingChunks.delete(key);
       }
 
-      // Done fading out — remove from scene
       if (fade.direction === "out" && fade.opacity <= 0) {
         this.scene.remove(fade.group);
         this.fadingChunks.delete(key);
@@ -218,74 +298,165 @@ export class ChunkRenderer {
     for (const tex of Object.values(this.terrainTextures)) {
       tex?.dispose();
     }
-    for (const tex of Object.values(this.cliffTextures)) {
-      tex?.dispose();
+    for (const mat of this.terrainMaterials.values()) {
+      mat.dispose();
     }
+    this.terrainMaterials.clear();
   }
 
-  /** Collect unique per-mesh materials from a chunk group (clones shared mats). */
-  private collectGroupMaterials(group: THREE.Group): THREE.MeshBasicMaterial[] {
-    const mats: THREE.MeshBasicMaterial[] = [];
+  /** Collect all materials from a chunk group for fade animation. */
+  private collectMaterials(group: THREE.Group): THREE.Material[] {
+    const mats: THREE.Material[] = [];
     group.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.material instanceof THREE.MeshBasicMaterial) {
-        // Clone shared material so opacity changes don't affect other chunks
-        const clone = child.material.clone();
-        child.material = clone;
-        mats.push(clone);
+      if (child instanceof THREE.Mesh) {
+        const meshMats = Array.isArray(child.material) ? child.material : [child.material];
+        for (const src of meshMats) {
+          // Clone so fading one chunk doesn't affect shared materials
+          const clone = src.clone();
+          mats.push(clone);
+        }
+        child.material = mats.length === 1 ? mats[0]! : [...mats];
       }
     });
     return mats;
   }
 
+  /**
+   * Build a heightmap mesh for one 8×8 chunk.
+   * Uses non-indexed geometry so each tile quad has independent UVs.
+   * Tiles are sorted by sprite and grouped into material ranges.
+   */
   private createChunkGroup(chunkCol: number, chunkRow: number): THREE.Group {
     const group = new THREE.Group();
     const { startCol, startRow, endCol, endRow } = getChunkTiles(chunkCol, chunkRow);
+    const v2 = this.isV2 ? (this.gameMap as GameMapV2) : null;
 
+    // Collect tile info
+    interface TileEntry {
+      col: number;
+      row: number;
+      texKey: string;
+      fallbackColor: number;
+      elevation: number;
+      isWater: boolean;
+    }
+
+    const tiles: TileEntry[] = [];
     for (let row = startRow; row <= endRow; row++) {
       for (let col = startCol; col <= endCol; col++) {
-        const cell = getGround(this.gameMap, col, row);
-        if (!cell) continue;
-
-        const geometry = new THREE.PlaneGeometry(1, 1);
-        const material = this.makeTerrainMat(cell.terrain);
-        const mesh = new THREE.Mesh(geometry, material);
-
-        const pos = tileToWorld(col, row, cell.elevation);
-        mesh.position.set(pos.x, pos.y, pos.z);
-        mesh.rotation.x = -Math.PI / 2; // lay flat
-
-        group.add(mesh);
-
-        // Add vertical cliff faces where this tile is higher than a neighbor.
-        const neighbors: [number, number, number][] = [
-          [col, row + 1, 0],
-          [col, row - 1, Math.PI],
-          [col + 1, row, Math.PI / 2],
-          [col - 1, row, -Math.PI / 2],
-        ];
-
-        for (const [nc, nr, rotY] of neighbors) {
-          const neighbor = getGround(this.gameMap, nc, nr);
-          const neighborElev = neighbor?.elevation ?? 0;
-          const elevDiff = cell.elevation - neighborElev;
-          if (elevDiff <= 0) continue;
-
-          const wallHeight = elevDiff * 0.5;
-          const wallGeo = new THREE.PlaneGeometry(1, wallHeight);
-          const wallMat = this.makeCliffMat(cell.terrain);
-          const wallMesh = new THREE.Mesh(wallGeo, wallMat);
-
-          // Position at the edge of this tile, halfway down the cliff
-          const wallY = pos.y - wallHeight / 2;
-          const wallX = pos.x + (nc - col) * 0.5;
-          const wallZ = pos.z + (nr - row) * 0.5;
-          wallMesh.position.set(wallX, wallY, wallZ);
-          wallMesh.rotation.y = rotY;
-
-          group.add(wallMesh);
-        }
+        const info = this.getCellInfo(col, row);
+        if (!info) continue;
+        tiles.push({ col, row, ...info });
       }
     }
+
+    if (tiles.length === 0) return group;
+
+    // Sort by texKey for material grouping
+    tiles.sort((a, b) => a.texKey.localeCompare(b.texKey));
+
+    // Build vertex buffers
+    const vertCount = tiles.length * VERTS_PER_TILE;
+    const positions = new Float32Array(vertCount * 3);
+    const uvs = new Float32Array(vertCount * 2);
+
+    // Track material groups
+    const groups: { start: number; count: number; materialIndex: number }[] = [];
+    const materials: THREE.MeshLambertMaterial[] = [];
+    let currentSprite = "";
+    let groupStartVert = 0;
+
+    for (let i = 0; i < tiles.length; i++) {
+      const tile = tiles[i]!;
+      const vi = i * VERTS_PER_TILE; // vertex index
+
+      // Material group tracking — new group when texKey changes
+      if (tile.texKey !== currentSprite) {
+        if (currentSprite !== "") {
+          groups.push({
+            start: groupStartVert,
+            count: vi - groupStartVert,
+            materialIndex: materials.length - 1,
+          });
+        }
+        currentSprite = tile.texKey;
+        groupStartVert = vi;
+        materials.push(this.getTerrainMaterial(tile.texKey, tile.fallbackColor));
+      }
+
+      // Corner elevations — stretched land for V2, flat for water/V1
+      let tlY: number, trY: number, blY: number, brY: number;
+      if (v2 && !tile.isWater) {
+        tlY = getElevationAt(v2, tile.col, tile.row) * ELEV_SCALE;
+        trY = getElevationAt(v2, tile.col + 1, tile.row) * ELEV_SCALE;
+        blY = getElevationAt(v2, tile.col, tile.row + 1) * ELEV_SCALE;
+        brY = getElevationAt(v2, tile.col + 1, tile.row + 1) * ELEV_SCALE;
+      } else {
+        const y = tile.elevation * ELEV_SCALE;
+        tlY = trY = blY = brY = y;
+      }
+
+      // Positions — two triangles per tile (counter-clockwise from above for upward normals)
+      const pi = vi * 3;
+      // Triangle 1: TL, BL, TR
+      positions[pi] = tile.col;
+      positions[pi + 1] = tlY;
+      positions[pi + 2] = tile.row;
+      positions[pi + 3] = tile.col;
+      positions[pi + 4] = blY;
+      positions[pi + 5] = tile.row + 1;
+      positions[pi + 6] = tile.col + 1;
+      positions[pi + 7] = trY;
+      positions[pi + 8] = tile.row;
+      // Triangle 2: TR, BL, BR
+      positions[pi + 9] = tile.col + 1;
+      positions[pi + 10] = trY;
+      positions[pi + 11] = tile.row;
+      positions[pi + 12] = tile.col;
+      positions[pi + 13] = blY;
+      positions[pi + 14] = tile.row + 1;
+      positions[pi + 15] = tile.col + 1;
+      positions[pi + 16] = brY;
+      positions[pi + 17] = tile.row + 1;
+
+      // UVs — each tile maps to full texture (matching vertex order)
+      const ui = vi * 2;
+      // Triangle 1: TL(0,1), BL(0,0), TR(1,1)
+      uvs[ui] = 0;
+      uvs[ui + 1] = 1;
+      uvs[ui + 2] = 0;
+      uvs[ui + 3] = 0;
+      uvs[ui + 4] = 1;
+      uvs[ui + 5] = 1;
+      // Triangle 2: TR(1,1), BL(0,0), BR(1,0)
+      uvs[ui + 6] = 1;
+      uvs[ui + 7] = 1;
+      uvs[ui + 8] = 0;
+      uvs[ui + 9] = 0;
+      uvs[ui + 10] = 1;
+      uvs[ui + 11] = 0;
+    }
+
+    // Close last material group
+    if (tiles.length > 0) {
+      groups.push({
+        start: groupStartVert,
+        count: tiles.length * VERTS_PER_TILE - groupStartVert,
+        materialIndex: materials.length - 1,
+      });
+    }
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    geometry.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+    geometry.computeVertexNormals();
+
+    for (const g of groups) {
+      geometry.addGroup(g.start, g.count, g.materialIndex);
+    }
+
+    const mesh = new THREE.Mesh(geometry, materials);
+    group.add(mesh);
 
     return group;
   }

@@ -664,8 +664,8 @@ body {
   }
 
   #minimap canvas {
-    max-width: 120px;
-    max-height: 120px;
+    width: 120px !important;
+    height: 120px !important;
   }
 
   /* Modals: nearly full screen on mobile */

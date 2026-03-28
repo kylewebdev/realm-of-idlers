@@ -22,3 +22,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Raw UO asset export (2.3GB+, not committed)
+export/
+
+# Generated UO assets (regenerate with: npx tsx scripts/extract-uo-map.ts --preset=britain)
+apps/game/public/maps/britain.json
+apps/game/public/maps/britain-art.json
+apps/game/public/tiles/texmap/
+apps/game/public/sprites/item/

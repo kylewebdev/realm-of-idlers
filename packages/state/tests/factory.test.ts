@@ -18,7 +18,7 @@ describe("createNewGameState", () => {
   });
 
   test("spawns at town center", () => {
-    expect(state.player.position).toEqual({ col: 32, row: 32 });
+    expect(state.player.position).toEqual({ col: 256, row: 232 });
   });
 
   test("all gathering/production skills start at level 1 with 0 XP", () => {

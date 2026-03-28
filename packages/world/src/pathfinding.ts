@@ -1,6 +1,6 @@
 import type { TileCoord } from "@realm-of-idlers/shared";
-import type { MapIndex } from "./types.js";
-import { isWalkable, getGround, isWallBlocked } from "./map-loader.js";
+import type { MapIndex, MapIndexV2 } from "./types.js";
+import { isWalkable, getGround, isWallBlocked, getGroundV2 } from "./map-loader.js";
 
 const DEFAULT_MAX_LENGTH = 50;
 
@@ -11,7 +11,7 @@ const DEFAULT_MAX_LENGTH = 50;
  * or null if no path exists or exceeds maxLength.
  */
 export function findPath(
-  index: MapIndex,
+  index: MapIndex | MapIndexV2,
   from: TileCoord,
   to: TileCoord,
   maxLength: number = DEFAULT_MAX_LENGTH,
@@ -56,8 +56,7 @@ export function findPath(
     closedSet.add(currentKey);
 
     // Explore 4 neighbors
-    const currentGround = getGround(index.map, current.col, current.row);
-    const currentElev = currentGround?.elevation ?? 0;
+    const currentElev = getElevation(index, current.col, current.row);
 
     for (const [dc, dr] of DIRECTIONS) {
       const nc = current.col + dc;
@@ -70,10 +69,10 @@ export function findPath(
       // Check edge walls blocking this movement
       if (isWallBlocked(index, current.col, current.row, dc, dr)) continue;
 
-      // Only allow stepping up/down by 1 elevation at a time
-      const neighborGround = getGround(index.map, nc, nr);
-      const neighborElev = neighborGround?.elevation ?? 0;
-      if (Math.abs(neighborElev - currentElev) > 1) continue;
+      // Allow stepping up/down within UO's character height (16 Z units)
+      // UO uses DEFAULT_CHARACTER_HEIGHT = 16 as the base step constraint
+      const neighborElev = getElevation(index, nc, nr);
+      if (Math.abs(neighborElev - currentElev) > 16) continue;
 
       const g = current.g + 1;
       const existing = openSet.get(nKey);
@@ -94,7 +93,7 @@ export function findPath(
  * Used for interacting with entities (trees, ores, structures) that block movement.
  */
 export function findPathToAdjacent(
-  index: MapIndex,
+  index: MapIndex | MapIndexV2,
   from: TileCoord,
   target: TileCoord,
   maxLength: number = DEFAULT_MAX_LENGTH,
@@ -144,6 +143,15 @@ function key(col: number, row: number): string {
 
 function manhattan(c1: number, r1: number, c2: number, r2: number): number {
   return Math.abs(c1 - c2) + Math.abs(r1 - r2);
+}
+
+function getElevation(index: MapIndex | MapIndexV2, col: number, row: number): number {
+  if ("staticGrid" in index) {
+    const cell = getGroundV2(index.map, col, row);
+    return cell?.elevation ?? 0;
+  }
+  const ground = getGround(index.map, col, row);
+  return ground?.elevation ?? 0;
 }
 
 function reconstructPath(node: Node): TileCoord[] {

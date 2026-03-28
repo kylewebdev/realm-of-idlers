@@ -1,17 +1,18 @@
 import * as THREE from "three";
 import type { TileCoord } from "@realm-of-idlers/shared";
 import { tileToWorld } from "@realm-of-idlers/shared";
-import type { MapIndex, MapObject } from "@realm-of-idlers/world";
+import type { MapIndex, MapIndexV2, MapObject } from "@realm-of-idlers/world";
 import {
   getGround,
   getObject,
   isWalkable,
   findPath,
-  getObjectType,
+  getStaticTile,
   screenToTile,
 } from "@realm-of-idlers/world";
 import type { SceneContext } from "../renderer/scene.js";
 import type { SpriteRenderer } from "../renderer/sprite-renderer.js";
+import type { TileRendererManager } from "../renderer/tile-renderer.js";
 import { uiStore } from "../ui/store.js";
 
 /** Tooltip descriptions keyed by object typeId or interaction activityId. */
@@ -43,10 +44,10 @@ function getTooltipForObject(obj: MapObject): { title: string; description: stri
     const tip = TOOLTIP_OVERRIDES[obj.interaction.structureType];
     if (tip) return tip;
   }
-  // Fall back to object type registry label
-  const typeDef = getObjectType(obj.typeId);
+  // Fall back to static tile registry label
+  const typeDef = getStaticTile(obj.typeId);
   if (typeDef) {
-    return { title: typeDef.label, description: `A ${typeDef.label.toLowerCase()}.` };
+    return { title: typeDef.name, description: `A ${typeDef.name.toLowerCase()}.` };
   }
   return null;
 }
@@ -58,8 +59,9 @@ function getTooltipForObject(obj: MapObject): { title: string; description: stri
 export function setupMouseInput(
   canvas: HTMLCanvasElement,
   sceneCtx: SceneContext,
-  index: MapIndex,
+  index: MapIndex | MapIndexV2,
   spriteRenderer: SpriteRenderer,
+  tileRenderer: TileRendererManager,
   playerPosition: () => TileCoord,
   onMoveTo: (path: TileCoord[]) => void,
   onClickObject: (obj: MapObject, coord: TileCoord) => void,
@@ -124,7 +126,14 @@ export function setupMouseInput(
     const entityCoord = raycastEntity(ndc.x, ndc.y);
     const tileCoord =
       entityCoord ??
-      screenToTile(ndc.x, ndc.y, sceneCtx.camera, sceneCtx.raycaster, sceneCtx.groundPlane);
+      screenToTile(
+        ndc.x,
+        ndc.y,
+        sceneCtx.camera,
+        sceneCtx.raycaster,
+        sceneCtx.groundPlane,
+        tileRenderer.getTerrainMeshes(),
+      );
 
     if (!tileCoord) {
       highlightMesh.visible = false;
@@ -171,7 +180,14 @@ export function setupMouseInput(
     const entityCoord = raycastEntity(ndc.x, ndc.y);
     const tileCoord =
       entityCoord ??
-      screenToTile(ndc.x, ndc.y, sceneCtx.camera, sceneCtx.raycaster, sceneCtx.groundPlane);
+      screenToTile(
+        ndc.x,
+        ndc.y,
+        sceneCtx.camera,
+        sceneCtx.raycaster,
+        sceneCtx.groundPlane,
+        tileRenderer.getTerrainMeshes(),
+      );
 
     if (!tileCoord) return;
 

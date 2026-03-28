@@ -13,8 +13,10 @@ catalog:
   "@types/node": ^24
   "@types/three": ^0.174
   immer: ^10
+  lil-gui: ^0.21.0
   mime: ^4.1.0
   sharp: ^0.34.5
+  simplex-noise: ^4.0.3
   three: ^0.174
   tsx: ^4.21.0
   typescript: ^5

@@ -12,6 +12,49 @@ State uses **Zustand + Immer middleware** — mutate via store action methods an
 
 Render loop (RAF) is separate from the tick loop. Offline catch-up runs missed ticks on tab refocus using `timestamps.lastTick`.
 
+## UO Rendering Reference
+
+ClassicUO source at `~/Code/ClassicUO`, UO Forever client at `/mnt/c/Program Files (x86)/UOForever/UO/`.
+
+### Map Data Format (MUL files)
+
+- Maps divided into **8×8 blocks**. Map 0 (Felucca/Britain): 7168×4096 tiles = 896×512 blocks.
+- Each terrain cell: `{ tileID: u16, z: i8 }` — graphic ID + signed elevation (-128 to 127).
+- Statics per block: `{ graphicID: u16, x: u8, y: u8, z: i8, hue: u16 }`.
+- Index files (staidx) store offset+length into statics file per block.
+- Key files: map0.mul (86MB), statics0.mul (257MB), tiledata.mul (3.1MB), texmaps.mul (29MB), artLegacyMUL.uop (216MB).
+
+### Isometric Projection (from ClassicUO)
+
+- Screen coords: `screenX = (X - Y) * 22`, `screenY = (X + Y) * 22 - Z * 4`
+- Tile diamond: 44×44 pixels. Each Z level = 4px vertical offset.
+- Depth sorting: `(X + Y) + (127 + priorityZ) * 0.01`
+- Priority adjustments: lands get -2, surfaces/bridges get +1, background flag gets -1.
+
+### Stretched Land (Terrain Deformation)
+
+Each terrain tile samples 4 corner Z values:
+
+- Top-left = own Z, Top-right = east neighbor, Bottom-left = south neighbor, Bottom-right = SE neighbor.
+- Per-corner visual offset: `cornerZ * 4` pixels (in 2D) or `cornerZ * ELEV_SCALE` (in our 3D).
+- Normal vectors computed via cross products for lighting.
+- Tile is "stretched" when corners differ — enables smooth hills and slopes.
+
+### Tile Flags (from tiledata.mul)
+
+Background, Impassable, Surface, Wall, Roof, Foliage, Bridge, Translucent, Animation, Door, Wet.
+
+### Asset Pipeline
+
+- `scripts/extract-uo-map.ts` → reads MUL binaries → GameMapV2 JSON
+- `scripts/build-terrain-assets.ts` → UO textures → `apps/game/public/tiles/`
+- `scripts/build-sprite-assets.ts` → UO item art → `apps/game/public/sprites/`
+- `scripts/build-asset-catalog.ts` → terrain + static catalogs in `packages/world/data/`
+
+### Three.js ↔ UO Mapping
+
+In Three.js we use real 3D: tile grid maps to X/Z plane, elevation maps to Y axis. The orthographic camera at an isometric angle provides the UO look. Three.js depth buffer handles sort order instead of manual priority calculation. Terrain is a heightmap mesh per chunk (9×9 vertices for 8×8 tiles) with per-vertex Y from elevation.
+
 ## Gotchas
 
 - Quest system lives in `apps/game` (not a package) — check `quests/registry` and `quests/checker`.

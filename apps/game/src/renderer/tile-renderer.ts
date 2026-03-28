@@ -1,4 +1,4 @@
-import type { GameMap } from "@realm-of-idlers/world";
+import type { GameMap, GameMapV2 } from "@realm-of-idlers/world";
 import { ChunkRenderer } from "@realm-of-idlers/world";
 import type { SceneContext } from "./scene.js";
 
@@ -11,7 +11,7 @@ export class TileRendererManager {
   private lastCol = -1;
   private lastRow = -1;
 
-  constructor(sceneCtx: SceneContext, gameMap: GameMap) {
+  constructor(sceneCtx: SceneContext, gameMap: GameMap | GameMapV2) {
     this.chunkRenderer = new ChunkRenderer(sceneCtx.scene, gameMap);
   }
 
@@ -32,6 +32,11 @@ export class TileRendererManager {
   /** Tick chunk fade-in/fade-out animations. Call each frame with delta in ms. */
   updateFade(deltaMs: number): void {
     this.chunkRenderer.updateFade(deltaMs);
+  }
+
+  /** Get all active terrain meshes for raycasting against elevated terrain. */
+  getTerrainMeshes(): import("three").Mesh[] {
+    return this.chunkRenderer.getTerrainMeshes();
   }
 
   dispose(): void {
